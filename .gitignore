@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.log
+config.ini
+# Isso remove tudo do índice do Git, mas NÃO deleta seus arquivos reais
+git rm -r --cached .
+
+*.txt
+*.html
+*.log
+config.ini
+*.txt
+*.log
