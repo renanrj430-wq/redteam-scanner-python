@@ -3,7 +3,7 @@
 """
 FERRAMENTA: RED TEAM AUDITOR PRO - V36.1 (INDUSTRIAL ENGINE)
 AUTOR: RENAN ALVES DA SILVA (@renan_security_researcher)
-LOCALIZAÇÃO: RIO DE JANEIRO, BR | 2026
+LOCALIZAÇÃO: GARDÊNIA AZUL, RIO DE JANEIRO, BR | 2026
 TECNOLOGIA: LLC TECHNOLOGY (LOGIC LLC) | OFFENSIVE SECURITY
 AVISO: Uso estritamente educacional e para auditorias autorizadas.
 """
@@ -20,6 +20,7 @@ import random
 import json
 import threading
 import hashid
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from colorama import Fore, Style, init
@@ -28,15 +29,20 @@ from colorama import Fore, Style, init
 init(autoreset=True)
 
 NICK = "renan_security_researcher"
-VERSAO = "36.0"
+VERSAO = "36.1"
 TIMEOUT_GLOBAL = 15
-THREADS_MOTOR = 25  
+THREADS_MOTOR = 25
 HORA_INICIO = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# --- WORDLISTS TÁTICAS EXPANDIDAS ---
+# Variável para persistência do alvo global entre funções
+url_alvo = ""
+
+# --------------------------------------------------------------------------------
+# WORDLISTS TÁTICAS EXPANDIDAS (MÓDULOS DE BUSCA INDUSTRIAL)
+# --------------------------------------------------------------------------------
 
 UA_LIST = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -49,37 +55,39 @@ UA_LIST = [
 ]
 
 WL_DIR = [
-    ".env", ".env.old", ".env.bak", ".env.example", ".git/config", ".git/index", 
-    "admin/", "administrator/", "admin/config.php", "admin/db.php", "backup/", 
-    "backup.sql", "backup.zip", "backup.tar.gz", "db.sql", "database.sql", 
-    "config.php", "config.php.bak", "config.inc", "config.old", ".ssh/id_rsa", 
-    "console/", ".docker/config.json", "setup.php", "phpinfo.php", "v1/.env", 
-    "wp-config.php", "wp-config.php.bak", "configuration.php", "settings.py", 
-    "web.config", ".htaccess", "old-index.php", "test.php", "sql.php", "info.php", 
-    "database.yml", "docker-compose.yml", "server-status", "dashboard/", "cp/", 
+    ".env", ".env.old", ".env.bak", ".env.example", ".git/config", ".git/index",
+    "admin/", "administrator/", "admin/config.php", "admin/db.php", "backup/",
+    "backup.sql", "backup.zip", "backup.tar.gz", "db.sql", "database.sql",
+    "config.php", "config.php.bak", "config.inc", "config.old", ".ssh/id_rsa",
+    "console/", ".docker/config.json", "setup.php", "phpinfo.php", "v1/.env",
+    "wp-config.php", "wp-config.php.bak", "configuration.php", "settings.py",
+    "web.config", ".htaccess", "old-index.php", "test.php", "sql.php", "info.php",
+    "database.yml", "docker-compose.yml", "server-status", "dashboard/", "cp/",
     "control/", "manager/", "logs/", "private/", "dump.sql", "config.bak",
     ".aws/config", ".npmrc", ".bash_history", "etc/passwd", "proc/self/environ",
-    "web-console/", "invoker/", "jmx-console/", "vnc.log", "cgi-bin/config.sh", 
+    "web-console/", "invoker/", "jmx-console/", "vnc.log", "cgi-bin/config.sh",
     "shell.php", "cmd.php", "v1/debug/env", "../../etc/passwd", "/.git/HEAD"
 ]
 
 WL_API = [
-    "api/v1/user", "api/v1/auth", "v2/auth", "swagger.json", "graphQL", 
-    "rest-api/v1/", "v1/config", "api/status", "internal/v1", "api/v1/debug", 
-    "api/docs", "v3/health", "api/v1/backup", "v1/list", "api/v2/users", 
-    "api/v1/cron", "api/export", "api/v1/settings", "v1/debug/vars", "api/v1/db", 
+    "api/v1/user", "api/v1/auth", "v2/auth", "swagger.json", "graphQL",
+    "rest-api/v1/", "v1/config", "api/status", "internal/v1", "api/v1/debug",
+    "api/docs", "v3/health", "api/v1/backup", "v1/list", "api/v2/users",
+    "api/v1/cron", "api/export", "api/v1/settings", "v1/debug/vars", "api/v1/db",
     "auth/login", "api/v2/db/config", "api/v1/metrics", "api/v1/cloud/credentials",
     "v1/internal/config", "api/v1/env", "api/v1/logs"
 ]
 
 WL_NUVEM = [
-    ".aws/credentials", "s3-config", "k8s/", "firebase.json", "cloud-config.yaml", 
-    ".azure/credentials", "metadata", "gsutil/config", "storage-key.json", 
-    "client_secret.json", "credentials.json", "service-account.json", 
+    ".aws/credentials", "s3-config", "k8s/", "firebase.json", "cloud-config.yaml",
+    ".azure/credentials", "metadata", "gsutil/config", "storage-key.json",
+    "client_secret.json", "credentials.json", "service-account.json",
     "access_key", "deployment.yaml", "terraform.tfstate", "vault-token"
 ]
 
-# --- FUNÇÕES DE INTERFACE ---
+# --------------------------------------------------------------------------------
+# FUNÇÕES DE INTERFACE E LOGGING
+# --------------------------------------------------------------------------------
 
 def status_log(mensagem, tipo="INFO"):
     hora = datetime.now().strftime('%H:%M:%S')
@@ -103,17 +111,16 @@ def exibir_alerta(secao, alvo, impacto_cliente, mapa_mina, ferra_ataque, extraid
     if extraido:
         print(f"{Fore.GREEN}{Style.BRIGHT}│ DADOS EXTRAÍDOS    : {extraido}")
     print(f"{Fore.RED}{Style.BRIGHT}└{'─'*95}┘")
-def detectar_hash(alvo):
-    hd = hashid.HashID()
-    identificacoes = list(hd.identifyHash(alvo))
-    return identificacoes
-# --- MOTOR DE INTELIGÊNCIA ---
+
+# --------------------------------------------------------------------------------
+# MOTOR DE INTELIGÊNCIA E ANÁLISE PROFUNDA
+# --------------------------------------------------------------------------------
 
 def analisador_profundo(html):
     achados = []
     regex_map = {
         "CRITICAL_LFI": r"root:x:0:0",
-        "CRITICAL_RCE": r"(uid=[0-9]+\(.*\))",
+        "CRITICAL_RCE": r"(uid=[0-9]+(.))",
         "DB_STR": r"(?:mongodb\+srv|postgres|mysql|redis):\/\/[^\s']+",
         "API_KEY": r"(?:api|secret|token|key|pass)[_-]?(\w{10,45})",
         "AWS_AUTH": r"AKIA[0-9A-Z]{16}",
@@ -131,7 +138,8 @@ def calibrar_motor_llc(domain):
     try:
         url_falsidade = f"http://{domain}/{uuid.uuid4().hex[:12]}"
         h = {'User-Agent': random.choice(UA_LIST)}
-        r = requests.get(url_falsidade, headers=h, timeout=10, verify=False, allow_redirects=True)
+        # CORREÇÃO: allow_redirects=False impede que o motor seja enganado por redirects 30x do WAF
+        r = requests.get(url_falsidade, headers=h, timeout=10, verify=False, allow_redirects=False)
         tamanho_base = len(r.content) if r.content else 0
         server_rg = r.headers.get('Server', 'Desconhecido')
         status_log(f"Assinatura LLC capturada: {tamanho_base} bytes.", "OK")
@@ -140,7 +148,9 @@ def calibrar_motor_llc(domain):
         status_log("Calibragem falhou. Usando detecção básica.", "WARN")
         return {"ativo": False, "tamanho": 0, "server": "Desconhecido"}
 
-# --- SESSÕES OPERACIONAIS ---
+# --------------------------------------------------------------------------------
+# SESSÕES OPERACIONAIS DE AUDITORIA
+# --------------------------------------------------------------------------------
 
 def s1_recon_dns(dom):
     destacar_sessao("1", "RECONHECIMENTO DNS")
@@ -165,13 +175,13 @@ def s3_fingerprint_tecnologico(dom):
         r = requests.get(f"http://{dom}", timeout=5, verify=False, headers={'User-Agent': random.choice(UA_LIST)})
         server = r.headers.get('Server', 'Não detectado')
         pow_by = r.headers.get('X-Powered-By', 'Não detectado')
-        
+
         waf_hits = []
         if any(h in r.headers for h in ["X-Vercel-Id", "X-Vercel-Cache"]): waf_hits.append("Vercel Edge")
         if "CF-RAY" in r.headers: waf_hits.append("Cloudflare WAF")
         if "X-Akamai-Transformed" in r.headers: waf_hits.append("Akamai WAF")
         if "x-amz-id-2" in r.headers: waf_hits.append("AWS S3/CloudFront")
-        
+
         print(f"    [+] BANNER DO SERVIDOR: {Fore.CYAN}{server}")
         print(f"    [+] TECNOLOGIA BASE   : {Fore.CYAN}{pow_by}")
         if waf_hits:
@@ -201,12 +211,22 @@ def core_fuzzing_worker(url, cal, secao):
     try:
         fake_ip = f"{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
         h = {'User-Agent': random.choice(UA_LIST), 'X-Forwarded-For': fake_ip, 'Referer': 'https://www.google.com/'}
+        # CORREÇÃO: allow_redirects=False captura o tamanho real do WAF na rota solicitada
         r = requests.get(url, headers=h, timeout=TIMEOUT_GLOBAL, verify=False, allow_redirects=False)
+        
+        # Filtra respostas de redirect que o WAF usa para camuflar arquivos inexistentes
+        if r.status_code in [301, 302, 307, 308]: return
+
         if r.status_code == 200:
             t_atual = len(r.content) if r.content else 0
-            if t_atual < 200 or (cal["ativo"] and abs(t_atual - cal["tamanho"]) < 150): return
+
+            # Automatismo de margem dinâmica (15%) para ignorar ruído do WAF
+        margem_waf = cal["tamanho"] * 0.15
+        if t_atual < 100 or (cal["ativo"] and abs(t_atual - cal["tamanho"]) <= margem_waf):
+            return
+            
             segredos = analisador_profundo(r.text)
-            exibir_alerta(secao, url, "Vazamento estrutural.", "Diretório exposto.", "Manual exploit", segredos)
+            exibir_alerta(secao, url, "Vazamento estrutural.", "Diretório/Arquivo Real exposto.", "Fuzzing Validado", segredos)
     except: pass
 
 def s5_6_7_multi_fuzz(dom, cal):
@@ -247,20 +267,106 @@ def s10_log_final(dom):
     print(f"{Fore.WHITE}PESQUISADOR : {NICK}")
     print(f"{Fore.CYAN}{'═' * 100}")
 
-def s11_identificador_hash(hash_input):
-    destacar_sessao("11", "IDENTIFICADOR DE HASH")
+# --------------------------------------------------------------------------------
+# SESSÕES DE PÓS-EXPLORAÇÃO E AUXILIARES (ROOT & HASH)
+# --------------------------------------------------------------------------------
+
+def s11_identificador_hash():
+    destacar_sessao("11", "PESQUISADOR E IDENTIFICADOR DE HASH")
+    hash_input = input(f"{Fore.WHITE}Insira o Hash para análise: ").strip()
+    if not hash_input: return
     try:
-        tamanho = len(hash_input)
-        if tamanho == 32:
-            print(f"{Fore.GREEN}[+] Tipo provável: MD5")
-        elif tamanho == 40:
-            print(f"{Fore.GREEN}[+] Tipo provável: SHA1")
-        elif tamanho == 64:
-            print(f"{Fore.GREEN}[+] Tipo provável: SHA256")
+        hd = hashid.HashID()
+        identificacoes = list(hd.identifyHash(hash_input))
+        if identificacoes:
+            print(f"\n{Fore.CYAN}[i] Resultados da Análise para: {Fore.YELLOW}{hash_input[:20]}...")
+            for i in identificacoes:
+                print(f"    {Fore.GREEN}[+] Tipo provável: {Style.BRIGHT}{i.name}")
+            print(f"\n{Fore.BLUE}[*] DICA DE QUEBRA:")
+            print(f"    {Fore.WHITE}Para hashes públicos, tente: {Fore.CYAN}https://crackstation.net/")
+            print(f"    {Fore.WHITE}Para brute-force local: {Fore.CYAN}john --format={identificacoes[0].name.lower()} hash.txt")
         else:
             print(f"{Fore.RED}[!] Formato de hash desconhecido.")
     except Exception as e:
-        print(f"{Fore.RED}[!] Erro: {e}")
+        print(f"{Fore.RED}[!] Erro no motor de identificação: {e}")
+
+def s12_privilege_escalation_auditor():
+    destacar_sessao("12", "AUDITOR DE PORTAS ADMINISTRATIVAS")
+    global url_alvo
+    alvo = url_alvo.replace("https://", "").replace("http://", "").split('/')[0]
+
+    portas_criticas = [22, 80, 443, 3306]
+    status_log(f"Iniciando varredura de portas em: {alvo}...")
+
+    for porta in portas_criticas:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2.5)
+            result = sock.connect_ex((alvo, porta))
+            if result == 0:
+                status_log(f"Interrogando assinatura na porta {porta}...", "OK")
+                
+                # Identifica se é porta Web para tratar Redirect de WAF
+                if porta in [80, 443]:
+                    # Usando requests para capturar o cabeçalho técnico sem seguir o redirect
+                    test_url = f"http://{alvo}" if porta == 80 else f"https://{alvo}"
+                    try:
+                        r_test = requests.get(test_url, timeout=3, verify=False, allow_redirects=False)
+                        if r_test.status_code in [301, 302, 307, 308]:
+                            status_log(f"Porta {porta} retornou Redirect {r_test.status_code} (WAF). Ignorando.", "INFO")
+                            sock.close()
+                            continue
+                    except: pass
+
+                sock.send(b"HEAD / HTTP/1.1\r\n\r\n" if porta in [80, 443] else b"\r\n")
+                banner = sock.recv(1024).decode(errors='ignore').strip()
+
+                if banner:
+                    destacar_sessao("13", "ANALISE DE VULNERABILIDADES")
+                    print(f"{Fore.GREEN}[+] Versão Detectada: {Fore.WHITE}{banner[:60]}")
+
+                    if "OpenSSH" in banner:
+                        exibir_alerta("Sessão 13", f"SSH: {banner[:20]}", "ALTO",
+                                      "Vetor de Shell Remoto. Busque por CVEs de Enumeração.",
+                                      f"msfconsole -q -x 'search {banner[:15]}'")
+
+                    if "Apache" in banner or "nginx" in banner:
+                        exibir_alerta("Sessão 13", "Web Server Root", "ALTO",
+                                      "Risco de Local Privilege Escalation (LPE). Verificar permissões de sudo.",
+                                      "linpeas.sh")
+                else:
+                    status_log(f"Porta {porta} aberta sem banner.", "WARN")
+                sock.close()
+        except:
+            continue
+
+def s14_mysql_root_audit():
+    destacar_sessao("14", "AUDITORIA DE CREDENCIAIS ROOT (DB)")
+    global url_alvo
+    alvo = url_alvo.replace("https://", "").replace("http://", "").split('/')[0]
+    status_log(f"Testando handshake real em {alvo}...", "WARN")
+    
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)
+        if s.connect_ex((alvo, 3306)) == 0:
+            banner = s.recv(1024)
+            s.close()
+            # Identificação rigorosa de Handshake MySQL para ignorar Fake Ports/WAF
+            if any(x in banner.lower() for x in [b"mysql", b"mariadb", b"caching_sha2_password", b"mysql_native_password"]):
+                exibir_alerta("Sessão 14", "MySQL Root", "Acesso Total ao Banco.",
+                              "Serviço MySQL Real detectado (Handshake Validado).",
+                              f"mysql -h {alvo} -u root -p''")
+            else:
+                status_log("Porta 3306 respondeu, mas o protocolo não é MySQL legítimo (WAF/Proxy).", "INFO")
+        else:
+            status_log("Porta 3306 fechada ou filtrada.", "OK")
+    except:
+        status_log("Erro durante a tentativa de handshake.", "FAIL")
+
+# --------------------------------------------------------------------------------
+# BANNER E FLUXO PRINCIPAL
+# --------------------------------------------------------------------------------
 
 def banner_principal():
     os.system('clear' if os.name == 'posix' else 'cls')
@@ -277,10 +383,13 @@ def banner_principal():
     print(f"{Fore.CYAN}{'═' * 100}\n")
 
 def main():
+    global url_alvo
     banner_principal()
-    alvo_raw = input(f"{Fore.WHITE}Defina o alvo: ").strip().lower()
+    alvo_raw = input(f"{Fore.WHITE}Defina o alvo (URL/IP): ").strip().lower()
     if not alvo_raw: return
-    dom = alvo_raw.replace("https://","").replace("http://","").split('/')[0]
+    url_alvo = alvo_raw
+    dom = url_alvo.replace("https://","").replace("http://","").split('/')[0]
+
     calibragem = calibrar_motor_llc(dom)
     s1_recon_dns(dom)
     s2_geo_infra(dom)
@@ -291,8 +400,30 @@ def main():
     s9_cookies_session(dom)
     s10_log_final(dom)
 
+    while True:
+        print(f"\n{Fore.YELLOW}{'─' * 30} [ FERRAMENTAS ADICIONAIS ] {'─' * 30}")
+        print(f"{Fore.WHITE} [1] Identificar/Pesquisar Hash")
+        print(f"{Fore.WHITE} [2] Varredura de Portas Administrativas (Root Intel)")
+        print(f"{Fore.WHITE} [3] Auditoria MySQL Root")
+        print(f"{Fore.WHITE} [0] Sair do Auditor")
+
+        op = input(f"\n{Fore.CYAN}Selecione uma opção: ").strip()
+
+        if op == '1':
+            s11_identificador_hash()
+        elif op == '2':
+            s12_privilege_escalation_auditor()
+        elif op == '3':
+            s14_mysql_root_audit()
+        elif op == '0':
+            status_log("Encerrando ferramenta. Até a próxima!", "INFO")
+            break
+        else:
+            status_log("Opção inválida.", "WARN")
+
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
+        print(f"\n{Fore.RED}[!] Operação interrompida pelo usuário.")
         sys.exit()
