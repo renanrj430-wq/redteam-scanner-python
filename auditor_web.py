@@ -9,6 +9,7 @@ AVISO: Uso estritamente educacional e para auditorias autorizadas.
 """
 import streamlit as st
 import requests
+from requests.adapters import HTTPAdapter
 import socket
 import ssl
 import time
@@ -18,6 +19,7 @@ import uuid
 import re
 import random
 import json
+import inspect
 import threading
 import hashid
 import subprocess
@@ -876,14 +878,12 @@ def s11_identificador_hash(dom):
             
     else:
         st.info("ℹ️ Insira um hash no campo acima para acionar o motor de análise multi-camadas e os playbooks de quebra.")
-def s12_privilege_escalation_auditor():
-    destacar_sessao("12", "AUDITOR DE PORTAS ADMINISTRATIVAS & BANNER GRABBING")
-    global url_alvo
+def s12_privilege_escalation_auditor(url_alvo):
+    st.write("### 🛡️ AUDITOR DE PORTAS ADMINISTRATIVAS & BANNER GRABBING")
     
-    # Limpa a URL para obter apenas o host/IP
+    # Limpeza da URL (Mantendo a sua lógica original)
     alvo = url_alvo.replace("https://", "").replace("http://", "").split('/')[0]
     
-    # Mapeamento de portas críticas e suas respectivas descrições
     portas_criticas = {
         22: "SSH/Acesso Remoto",
         80: "HTTP (Web)",
@@ -892,27 +892,23 @@ def s12_privilege_escalation_auditor():
         3389: "RDP (Windows Remote Desktop)",
         8080: "HTTP Alternativo / Tomcat",
         8443: "HTTPS Alternativo"
-    }
-    
-    for porta, servico_esperado in portas_criticas.items():
-        sock = None
+     }
+
+    for porta, servico in portas_criticas.items():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2.5)
             resultado = sock.connect_ex((alvo, porta))
             
             if resultado == 0:
-                status_log(f"Porta {porta} [{servico_esperado}] aberta. Interrogando...", "OK")
                 banner = ""
-                
-                # Tratamento para portas SSL/TLS (HTTPS)
+                # Tratamento para portas SSL/TLS
                 if porta in [443, 8443]:
                     try:
                         contexto = ssl.create_default_context()
                         contexto.check_hostname = False
                         contexto.verify_mode = ssl.CERT_NONE
                         sock_ssl = contexto.wrap_socket(sock, server_hostname=alvo)
-                        
                         requisicao = f"HEAD / HTTP/1.1\r\nHost: {alvo}\r\nConnection: close\r\n\r\n"
                         sock_ssl.sendall(requisicao.encode('utf-8'))
                         resposta = sock_ssl.recv(2048).decode(errors='ignore')
@@ -922,7 +918,7 @@ def s12_privilege_escalation_auditor():
                                 banner += f"[{linha.strip()}] "
                         if not banner:
                             banner = resposta.split("\r\n")[0]
-                    except Exception:
+                    except:
                         banner = "Conexão SSL estabelecida, mas sem banner HTTP claro."
                 
                 # Tratamento para portas HTTP comuns
@@ -940,18 +936,14 @@ def s12_privilege_escalation_auditor():
                 else:
                     sock.send(b"\r\n")
                     resposta = sock.recv(1024).decode(errors='ignore').strip()
-                    banner = resposta.replace('\n', ' ').replace('\r', '')[:60] if resposta else "Sem banner passivo."
-                
-                if banner:
-                    print(f"{Fore.GREEN}[+] Banner (Porta {porta}): {Fore.WHITE}{banner}")
-                
-        except (socket.timeout, ConnectionRefusedError):
-            continue
-        except Exception as e:
-            print(f"Erro na porta {porta}: {e}")
-        finally:
-            if sock:
+                    banner = resposta.replace('\n', ' ').replace('\r', '')[:60] if resposta else "Sem banner para serviço Raw"
+
+                st.success(f"Porta {porta} ({servico}) encontrada!")
+                st.info(f"*Banner:* {banner}")
+            
                 sock.close()
+        except Exception as e:
+            st.error(f"Erro na porta {porta}: {e}")
 def s13_bruteforce_simulation(dom):
     destacar_sessao("13", "SIMULAÇÃO DE BRUTE-FORCE (AUTH)")
     status_log("Testando vulnerabilidade a brute-force em endpoints comuns...", "INFO")
@@ -993,68 +985,63 @@ def s13_bruteforce_simulation(dom):
             
     # Limpa os indicadores de progresso ao finalizar
     barra_progresso.empty()
-def s14_mysql_root_audit():
-    destacar_sessao("14", "AUDITORIA DE CREDENCIAIS ROOT (DATABASE)")
-    global url_alvo
+def s14_mysql_root_audit(url_alvo):
+    # Cabeçalho da sessão
+    st.markdown("---")
+    st.subheader("🔍 AUDITORIA DE CREDENCIAIS ROOT (DATABASE)")
     
-    # Sanitização precisa para isolar apenas o Host ou IP do banco de dados
+    # Limpeza da URL
     alvo = url_alvo.replace("https://", "").replace("http://", "").split('/')[0]
     
-    status_log(f"A analisar comportamento do serviço MySQL/MariaDB em {alvo}:3306...", "INFO")
-    
-    sock = None
-    try:
-        # Cria um socket TCP bivalente com timeout curto para não travar o Streamlit
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(4.0)
-        
-        # Tenta a ligação na porta padrão do MySQL
-        resultado = sock.connect_ex((alvo, 3306))
-        
-        if resultado == 0:
-            # Captura o pacote de handshake inicial enviado pelo servidor (mecanismo ativo)
-            packet = sock.recv(1024)
-            
-            if packet and len(packet) > 5:
-                # O protocolo MySQL envia o tamanho do pacote nos primeiros 3 bytes, 
-                # seguido pelo número do pacote e a versão do protocolo (geralmente \x0a ou 10)
-                is_mysql_protocol = b"mysql" in packet.lower() or b"mariadb" in packet.lower() or packet[4] == 10
-                
-                if is_mysql_protocol:
-                    # Extrai uma string limpa do banner para o relatório visual
-                    banner_limpo = "".join([chr(b) for b in packet if 32 <= b < 127]).strip()
-                    # Filtra caracteres residuais do protocolo para deixar apenas o nome do serviço
-                    if "mysql" in banner_limpo.lower():
-                        banner_exibicao = "MySQL Server (Handshake Ativo)"
-                    elif "mariadb" in banner_limpo.lower():
-                        banner_exibicao = "MariaDB Server (Handshake Ativo)"
-                    else:
-                        banner_exibicao = f"Serviço compatível com MySQL Protocol"
+    # Placeholder para log de status no Streamlit
+    status_placeholder = st.empty()
+    status_placeholder.info(f"Analisando comportamento do serviço MySQL/MariaDB em {alvo}:3306...")
 
-                    status_log("Porta 3306 ativa e a responder ao protocolo de Base de Dados.", "OK")
-                    
-                    # Dispara o teu card de alerta customizado na interface Streamlit
-                    exibir_alerta(
-                        "Sessão 14", 
-                        f"{alvo}:3306", 
-                        "Acesso Total / Exposição Crítica.", 
-                        f"Instância exposta publicamente: {banner_exibicao}. Risco severo de força bruta ou exploit direto.", 
-                        f"mysql -h {alvo} -u root"
-                    )
-                else:
-                    # Caso a porta esteja aberta mas não responda como um MySQL real (ex: honeypot ou redirecionamento)
-                    status_log("Porta 3306 aberta, mas o payload não corresponde ao protocolo do MySQL.", "INFO")
-            else:
-                status_log("Porta 3306 aberta, mas o serviço não enviou um banner de boas-vindas.", "INFO")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(4.0)
+            resultado = sock.connect_ex((alvo, 3306))
+
+            if resultado == 0:
+                # Captura de banner (handshake inicial)
+                packet = sock.recv(1024)
                 
+                if packet and len(packet) > 5:
+                    # Verifica se o protocolo é MySQL baseado nos bytes iniciais
+                    is_mysql = b"mysql" in packet.lower() or b"mariadb" in packet.lower() or packet[4] == 10
+                    
+                    if is_mysql:
+                        # Extração limpa do banner
+                        banner_limpo = "".join([chr(b) for b in packet if 32 <= b < 127]).strip()
+                        
+                        # Definição de exibição conforme o conteúdo
+                        if "mysql" in banner_limpo.lower():
+                            banner_exibicao = "MySQL Server (Handshake Ativo)"
+                        elif "mariadb" in banner_limpo.lower():
+                            banner_exibicao = "MariaDB Server (Handshake Ativo)"
+                        else:
+                            banner_exibicao = "Serviço compatível com MySQL Protocol"
+                        
+                        status_placeholder.success("Porta 3306 ativa e respondendo ao protocolo de BD.")
+                        
+                        # Disparo do alerta visual (usando sua função ou st.error para alto impacto)
+                        exibir_alerta(
+                            "Sessão 14",
+                            f"{alvo}:3306",
+                            "Acesso Total / Exposição Crítica.",
+                            f"Instância exposta publicamente: {banner_exibicao}. Risco severo de força bruta ou exploit direto. Comando: mysql -h {alvo} -u root"
+                        )
+                    else:
+                        status_placeholder.warning("Porta 3306 aberta, mas o payload não corresponde ao protocolo MySQL.")
+                else:
+                    status_placeholder.warning("Porta 3306 aberta, mas não houve envio de banner de boas-vindas.")
+            else:
+                status_placeholder.error("Porta 3306 fechada ou inacessível.")
+
     except socket.timeout:
-        pass
+        status_placeholder.error("Timeout na conexão com o MySQL.")
     except Exception as e:
-        # Evita a quebra do script principal, registando qualquer anomalia de sockets de forma controlada
-        print(f"Erro de diagnóstico na Sessão 14: {e}")
-    finally:
-        if sock:
-            sock.close()
+        st.error(f"Erro de diagnóstico na Sessão 14: {e}")
 def s15_subdomain_discovery(dom):
     destacar_sessao("15", "DESCOBERTA DE SUBDOMÍNIOS (OSINT INTERNO)")
     
@@ -1129,6 +1116,72 @@ def s15_subdomain_discovery(dom):
     else:
         status_log("Varredura concluída. Nenhum subdomínio alternativo mapeado.", "INFO")
         st.info("Nenhum subdomínio adicional foi detectado na lista de dicionário padrão.")
+
+def s16_ct_logs_discovery(dom):
+    st.markdown("---")
+    st.markdown("### 🛰️ Sessão 16: Reconhecimento Passivo via CT Logs (Histórico SSL)")
+    status_log(f"Interrogando registros globais de Certificados para: {dom}...", "INFO")
+    
+    alvo_limpo = dom.replace("https://", "").replace("http://", "").split('/')[0].strip()
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    
+    subdominios_encontrados = set()
+    sucesso = False
+
+    # --- PLANO A: Executa o crt.sh ---
+    url_crt = f"https://crt.sh/?q=%25.{alvo_limpo}&output=json"
+    try:
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=2)
+        session.mount('https://', adapter)
+        
+        resposta = session.get(url_api=url_crt, headers=headers, timeout=10)
+        
+        if resposta.status_code == 200:
+            dados_json = resposta.json()
+            for registro in dados_json:
+                name_value = registro.get('name_value', '')
+                for sub in name_value.split('\n'):
+                    sub_limpo = sub.strip().lower()
+                    if sub_limpo and not sub_limpo.startswith('*'):
+                        subdominios_encontrados.add(sub_limpo)
+            sucesso = True
+            st.success("✅ Dados obtidos com sucesso via crt.sh!")
+            
+    except Exception:
+        # Se der qualquer erro no crt.sh (Timeout, 502, etc), o Python ignora e avança para o Plano B
+        pass
+
+    # --- PLANO B: Ativado automaticamente se o crt.sh falhar ---
+    if not sucesso:
+        st.warning("⚠️ Servidor principal (crt.sh) instável ou pesado. Ativando Plano B (Certspotter API)...")
+        url_spotter = f"https://api.certspotter.com/v1/issuances?domain={alvo_limpo}&include_subdomains=true&expand=dns_names"
+        
+        try:
+            resposta_b = requests.get(url_spotter, headers=headers, timeout=12)
+            if resposta_b.status_code == 200:
+                dados_json_b = resposta_b.json()
+                for registro in dados_json_b:
+                    dns_names = registro.get('dns_names', [])
+                    for sub in dns_names:
+                        sub_limpo = sub.strip().lower()
+                        # Garante que só pega subdomínios relacionados ao alvo
+                        if alvo_limpo in sub_limpo and not sub_limpo.startswith('*'):
+                            subdominios_encontrados.add(sub_limpo)
+                sucesso = True
+                st.success("✅ Dados obtidos com sucesso via Certspotter API!")
+        except Exception as e:
+            st.error(f"❌ Ambos os servidores de CT Logs falharam ou deram timeout: {e}")
+
+    # --- EXIBIÇÃO DOS RESULTADOS NA TELA ---
+    if sucesso:
+        st.write("### 📋 Subdomínios Históricos Identificados (100% Passivo)")
+        if subdominios_encontrados:
+            lista_ordenada = sorted(list(subdominios_encontrados))
+            st.metric(label="Total de Subdomínios Reais Descobertos", value=len(lista_ordenada))
+            st.dataframe({"Domínio / Subdomínio Mapeado": lista_ordenada}, use_container_width=True)
+        else:
+            st.warning("Nenhum registro público de subdomínio foi localizado para este alvo.")
 # --------------------------------------------------------------------------------
 # BANNER E FLUXO PRINCIPAL
 # --------------------------------------------------------------------------------
@@ -1187,7 +1240,11 @@ def main():
                     s15_subdomain_discovery(dom)
                 except Exception as e:
                     st.error(f"⚠️ Erro na Sessão 15 (Subdomínios): {e}")
-
+                
+                try:
+                    s16_ct_logs_discovery(dom)  # <-- Adiciona o novo braço de satélite passivo aqui!
+                except Exception as e:
+                    st.error(f"⚠️ Erro na Sessão 16 (CT Logs): {e}")
                 # --- FASE 3: FINGERPRINT & CABEÇALHOS ---
                 status.update(label="🛡️ Fase 3: Analisando Fingerprint e Cabeçalhos...", state="running")
                 try:
@@ -1219,44 +1276,37 @@ def main():
                 except Exception as e:
                     st.error(f"⚠️ Erro na Sessão 9 (Cookies): {e}")
 
-                # --- FASE 5: SIMULAÇÃO DE VETORES DE AUTENTICAÇÃO & DB ---
+                 # --- FASE 5: SIMULAÇÃO DE VETORES DE AUTENTICAÇÃO & DB ---
                 status.update(label="🔑 Testando Vetores de Autenticação e Exploração...", state="running")
                 try:
-                    st.write("🔑 Testando Vetores de Autenticação e Brute-Force...")
-                    s13_bruteforce_simulation(dom)
+                      st.write("🔑 Testando Vetores de Autenticação e Brute-Force...")
+                      s13_bruteforce_simulation(dom)
                 except Exception as e:
                     st.error(f"⚠️ Erro na Sessão 13 (Brute-Force): {e}")
 
-                # SESSÃO 12 ADICIONADA: Chamada segura tratando o escopo da função original
+                # --- SESSÃO 12: Auditoria de Portas Administrativas ---
+                st.write("🎚️ Executando Auditoria de Portas Administrativas (Sessão 12) ...")
                 try:
-                    st.write("🎚️ Executando Auditoria de Portas Administrativas (Sessão 12)...")
-                    try:
-                        s12_privilege_escalation_auditor(dom)
-                    except TypeError:
-                        # Fallback caso a sua def s12 ainda não receba parâmetros
-                        s12_privilege_escalation_auditor()
+                # Chamada direta e simples
+                   s12_privilege_escalation_auditor(dom)
                 except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 12 (Privesc): {e}")
-
-                # SESSÃO 14 ADICIONADA: Chamada segura tratando o escopo da função original
+                   st.error(f"⚠️ Erro crítico na Sessão 12: {e}")
+                # --- SESSÃO 14: Verificação de Root MySQL ---
+                # --- SESSÃO 14: Verificação de Root MySQL ---
+                st.write("🗄️ Iniciando Verificação de Root MySQL (Sessão 14) ...")
                 try:
-                    st.write("🗄️ Iniciando Verificação de Root MySQL (Sessão 14)...")
-                    try:
-                        s14_mysql_root_audit(dom)
-                    except TypeError:
-                        # Fallback caso a sua def s14 ainda não receba parâmetros
-                        s14_mysql_root_audit()
+                # Apenas chame a função passando o 'dom' diretamente
+                    s14_mysql_root_audit(dom)
                 except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 14 (MySQL Audit): {e}")
-
+                    st.error(f"⚠️ Erro crítico na Sessão 14 (MySQL Audit): {e}")
                 # --- FASE 6: PROCESSAMENTO DE ASSINATURAS & LOGS ---
                 if activar_hash_audit:
                     status.update(label="📊 Analisando Assinaturas de Criptografia...", state="running")
-                    try:
-                        st.write("📊 Executando Identificador de Hash Avançado (Sessão 11)...")
-                        s11_identificador_hash(dom)
-                    except Exception as e:
-                        st.error(f"⚠️ Erro na Sessão 11 (Hash): {e}")
+                try:
+                      st.write("📊 Executando Identificador de Hash Avançado (Sessão 11)...")
+                      s11_identificador_hash(dom)
+                except Exception as e:
+                      st.error(f"⚠️ Erro na Sessão 11 (Hash): {e}")
 
                 try:
                     status.update(label="💾 Consolidando Relatório e Logs Finais...", state="running")
