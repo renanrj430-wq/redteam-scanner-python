@@ -9,6 +9,7 @@ AVISO: Uso estritamente educacional e para auditorias autorizadas.
 """
 
 import streamlit as st
+import ollama
 import requests
 from requests.adapters import HTTPAdapter
 import socket
@@ -29,65 +30,62 @@ from shodan import Shodan
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-
-# --- INICIALIZAÇÃO E AMBIENTE ---
-# Carrega as chaves do arquivo .env de forma segura
-load_dotenv() 
-
-# --- INICIALIZAÇÃO SEGURA DO SESSION STATE ---
-if "wordlist_diretorios" not in st.session_state:
-    st.session_state.wordlist_diretorios = ["admin/", "config.php", ".env", "backup.sql"]
-if "wordlist_api" not in st.session_state:
-    st.session_state.wordlist_api = ["api/v1/users", "v1/config", "swagger.json"]
-if "wordlist_nuvem" not in st.session_state:
-    st.session_state.wordlist_nuvem = ["storage/", "bucket/", "assets/"]
-
-# Instancia os clientes usando as variáveis de ambiente carregadas
-# Exemplo: GROQ_API_KEY e SHODAN_API_KEY configuradas no seu .env
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-shodan_client = Shodan(os.getenv("SHODAN_API_KEY"))
+from colorama import Fore, Style, init # --- INICIALIZAÇÃO E AMBIENTE —
+init(autoreset=True)
+load_dotenv()
 
 # --- 1. FUNÇÃO DA IA (Motor) ---
 def analisar_logs_via_nuvem(relatorio, alvo):
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        return "Erro: Chave GROQ_API_KEY não configurada no arquivo .env"
-        
-    try:
+    # DICA: Guarde sua chave num arquivo .env para segurança
+    api_key = "SUA_CHAVE_AQUI"
+    
+try:
+        # Inicializa o cliente oficial da nuvem
+        from groq import Groq
         client = Groq(api_key=api_key)
         
+        # Faz a chamada leve de Stream
         completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "user", 
-                    "content": (
-                        f"Você é um Auditor de Segurança Sênior (Red Team). Analise o seguinte log do alvo '{alvo}' "
-                        f"e gere um Relatório Executivo de Segurança estruturado exatamente com os seguintes tópicos em Markdown:\n\n"
-                        f"### 📋 RESUMO DA ATIVIDADE\n(Informar data, hora, alvo e se a execução foi concluída com sucesso baseado no log)\n\n"
-                        f"### 🔍 ANÁLISE CRÍTICA (CONTEXTO DE SEGURANÇA)\n(Avaliar o comportamento do log. Identificar possíveis falhas, anomalias ou falta de informações cruciais para auditoria)\n\n"
-                        f"### ⚠️ NÍVEL DE RISCO ESTIMADO\n(Classificar em Baixo, Médio, Alto ou Crítico e justificar curto)\n\n"
-                        f"### 🛡️ RECOMENDAÇÕES RESTRITAS\n(Passar de 2 a 3 ações corretivas para melhorar a segurança)\n\n"
-                        f"Log para análise: {relatorio}"
-                    )
-                }
-            ],
+            model="llama3-8b-8192",
+            messages=[{"role": "user", "content": f"Analise este log do {alvo}: {relatorio}"}],
             stream=True
         )
         
-        resposta_completa = ""
+        print(f"\n{Fore.GREEN}[+] Analisando com IA em tempo real:{Style.RESET_ALL} ", end="", flush=True)
+        
+        # O seu terminal só recebe e printa, sem gastar RAM processando o modelo
         for chunk in completion:
             texto_chunk = chunk.choices[0].delta.content or ""
-            resposta_completa += texto_chunk
+            print(texto_chunk, end="", flush=True)
             
-        return resposta_completa
+        print("\n")
         
     except Exception as e:
         return f"Erro de conexão nuvem: {e}"
+# 1. Configurações Globais de Constantes (Imutáveis)
+NICK = "renan_security_researcher"
+VERSAO = "37.0"
+TIMEOUT_GLOBAL = 15
+
+# Desativa avisos de SSL uma única vez no escopo global
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+# 2. Configuração do Front-End (Streamlit)
+st.set_page_config(page_title="Audit Industrial", layout="wide")
+st.title(f"🛡️ Industrial Engine v{VERSAO}")
+
+# 3. Gerenciamento de Estado Seguro (Session State)
+# Isso garante que cada usuário tenha suas variáveis isoladas na memória
+
+# --- INICIALIZAÇÃO E AMBIENTE ---
+init(autoreset=True)
+load_dotenv()
 
 # 1. Configurações Globais de Constantes (Imutáveis)
 NICK = "renan_security_researcher"
-VERSAO = "38.0"
+VERSAO = "37.0"
 TIMEOUT_GLOBAL = 15
 
 # Desativa avisos de SSL uma única vez no escopo global
@@ -115,36 +113,82 @@ if "hora_inicio" not in st.session_state:
 # O slider atualiza diretamente a variável de estado do usuário atual
 st.sidebar.slider("Velocidade (Threads)", 1, 100, key="threads_motor")
 # --- FIM DO BLOCO DE INICIALIZAÇÃO ---
-# ==============================================================================
-# 🎯 RECURSOS TÁTICOS GLOBAIS (Isolados e Otimizados)
-# ==============================================================================
+# --------------------------------------------------------------------------------
+# WORDLISTS TÁTICAS EXPANDIDAS (MÓDULOS DE BUSCA INDUSTRIAL)
+# --------------------------------------------------------------------------------
 
-# Lista Rotativa de User-Agents (Evita bloqueios e resolve o NameError)
 UA_LIST = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Googlebot/2.1 (+http://www.google.com/bot.html)',
+    'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+    'DuckDuckBot/1.0; (+http://duckduckgo.com/duckduckbot.html)',
+    'Baiduspider/2.0; (+http://www.baidu.com/search/spider.html)',
+    'YandexBot/3.0; (+http://yandex.com/bots)',
+    'Sogou web spider/4.0(+http://www.sogou.com/docs/help/webmasters.htm#07)',
+    'Exabot/3.0; (+http://www.exabot.com/go/robot)'
 ]
 
-# Wordlist Estratégica de Diretórios Sensíveis (Direto ao ponto)
 WL_DIR = [
-    ".env", ".env.old", ".git/config", "admin/", "administrator/", "backup.sql", 
-    "backup.zip", "config.php", "config.php.bak", "wp-config.php", "db.sql", 
-    "setup.php", "phpinfo.php", "v1/env", ".ssh/id_rsa", "server-status"
+    ".env", ".env.old", ".env.bak", ".env.example", ".git/config", ".git/index",
+    "admin/", "administrator/", "admin/config.php", "admin/db.php", "backup/",
+    "backup.sql", "backup.zip", "backup.tar.gz", "db.sql", "database.sql",
+    "config.php", "config.php.bak", "config.inc", "config.old", ".ssh/id_rsa",
+    "console/", ".docker/config.json", "setup.php", "phpinfo.php", "v1/.env",
+    "wp-config.php", "wp-config.php.bak", "configuration.php", "settings.py",
+    "web.config", ".htaccess", "old-index.php", "test.php", "sql.php", "info.php",
+    "database.yml", "docker-compose.yml", "server-status", "dashboard/", "cp/",
+    "control/", "manager/", "logs/", "private/", "dump.sql", "config.bak",
+    ".aws/config", ".npmrc", ".bash_history", "etc/passwd", "proc/self/environ",
+    "web-console/", "invoker/", "jmx-console/", "vnc.log", "cgi-bin/config.sh",
+    "shell.php", "cmd.php", "v1/debug/env", "../../etc/passwd", "/.git/HEAD",
+    "wp-admin/", "wp-content/", "wp-includes/", "xmlrpc.php", "wp-login.php",
+    "api/v1/", "api/v2/", "node_modules/", "package.json", "composer.json",
+    "vendor/", "app/config/", "lib/", "src/", "public/", "dist/", "build/",
+    "tests/", "tools/", "scripts/", "cron/", "temp/", "tmp/", "cache/",
+    "uploads/", "images/", "css/", "js/", "assets/", "files/", "documents/",
+    "download/", "install/", "update/", "upgrade/", "maintenance/", "error/",
+    "cgi-bin/", "perl/", "python/", "java/", "dotnet/", "asp/", "jsp/", "php/",
+    "html/", "htm/", "txt/", "log/", "bak/", "old/", "new/", "test/", "dev/",
+    "prod/", "staging/", "local/", "remote/", "internal/", "external/",
+    "secure/", "auth/", "login/", "logout/", "signup/", "register/", "profile/",
+    "account/", "settings/", "config/", "db/", "sql/", "mysql/", "pgsql/",
+    "oracle/", "mssql/", "sqlite/", "redis/", "mongodb/", "elastic/", "solr/",
+    "memcached/", "rabbitmq/", "kafka/", "docker/", "kubernetes/", "aws/",
+    "azure/", "google/", "gcp/", "cloud/", "cdn/", "proxy/", "loadbalancer/",
+    "firewall/", "waf/", "vpn/", "ssh/", "ftp/", "smtp/", "pop3/", "imap/",
+    "dns/", "whois/", "snmp/", "ntp/", "ldap/", "radius/", "git/", "svn/",
+    "hg/", "cvs/", "bitbucket/", "github/", "gitlab/", "jenkins/", "travis/",
+    "circleci/", "docker-compose.yml", "Dockerfile", "Jenkinsfile", "Makefile",
+    "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "SECURITY.md"
 ]
 
-# Wordlist de Endpoints Críticos de API
 WL_API = [
-    "api/v1/user", "api/v1/auth", "v2/auth", "swagger.json", "graphQL", 
-    "api/status", "internal/v1", "api/v1/debug", "api/docs", "v3/health"
+    "api/v1/user", "api/v1/auth", "v2/auth", "swagger.json", "graphQL",
+    "rest-api/v1/", "v1/config", "api/status", "internal/v1", "api/v1/debug",
+    "api/docs", "v3/health", "api/v1/backup", "v1/list", "api/v2/users",
+    "api/v1/cron", "api/export", "api/v1/settings", "v1/debug/vars", "api/v1/db",
+    "auth/login", "api/v2/db/config", "api/v1/metrics", "api/v1/cloud/credentials",
+    "v1/internal/config", "api/v1/env", "api/v1/logs", "v1/debug/pprof",
+    "api/v1/secrets", "api/v1/tokens", "api/v1/keys", "api/v1/passwords",
+    "api/v1/configs", "api/v1/databases", "api/v1/servers", "api/v1/networks",
+    "api/v1/storage", "api/v1/clusters", "api/v1/deployments", "api/v1/services",
+    "api/v1/ingresses", "api/v1/nodes", "api/v1/pods", "api/v1/namespaces",
+    "api/v1/jobs", "api/v1/events", "api/v1/logs", "api/v1/metrics", "api/v1/health"
 ]
 
-# Wordlist de Cloud e Armazenamento
-WL_NUMVEM = [
-    ".aws/credentials", "s3-config", "k8s/", "firebase.json", 
-    "storage-key.json", "client_secret.json", "service-account.json"
+WL_NUVEM = [
+    ".aws/credentials", "s3-config", "k8s/", "firebase.json", "cloud-config.yaml",
+    ".azure/credentials", "metadata", "gsutil/config", "storage-key.json",
+    "client_secret.json", "credentials.json", "service-account.json",
+    "access_key", "deployment.yaml", "terraform.tfstate", "vault-token",
+    ".kube/config", ".digitalocean/config.yaml", ".heroku/api.key",
+    ".cloudflare/api.token", ".terraform.d/credentials.tfrc.json",
+    "cloudinit.sh", "userdata.sh", "bootstrap.sh", "setup.sh"
 ]
+
 # --------------------------------------------------------------------------------
 # FUNÇÕES DE INTERFACE E LOGGING
 # --------------------------------------------------------------------------------
@@ -221,11 +265,32 @@ def s0_inteligencia_shodan(dom):
 # --------------------------------------------------------------------------------
 # MOTOR DE CALIBRAGEM E ANÁLISE PROFUNDA
 # --------------------------------------------------------------------------------
+
+def analisador_profundo(html):
+    achados = []
+    regex_map = {
+        "CRITICAL_LFI": r"root:x:0:0",
+        "CRITICAL_RCE": r"(uid=[0-9]+\(.+?\))",
+        "DB_STR": r"(?:mongodb\+srv|postgres|mysql|redis):\/\/[\w.-]+(?::\d+)?\/[^\s'\"]+",
+        "API_KEY": r"(?:api|secret|token|key|pass)[_-]?(?:\w{10,45})",
+        "AWS_AUTH": r"AKIA[0-9A-Z]{16}",
+        "JWT_TOKEN": r"eyJ[A-Za-z0-9-_=]+\.eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]*",
+        "GOOGLE_KEY": r"AIza[0-9A-Za-z-_]{35}",
+        "STRIPE_KEY": r"sk_live_[0-9a-zA-Z]{24}",
+        "MAILGUN_KEY": r"key-[0-9a-zA-Z]{32}",
+        "TWILIO_SID": r"AC[0-9a-fA-F]{32}",
+        "GH_TOKEN": r"gh[pousr]_[A-Za-z0-9_]{36}"
+    }
+    for chave, regex in regex_map.items():
+        m = re.search(regex, html, re.IGNORECASE)
+        if m: achados.append(f"{chave}: {m.group(0)[:35]}...")
+    return " | ".join(achados) if achados else None
+
 def calibrar_motor_llc(domain):
-    """
-    Sua função nativa mapeando o comportamento do alvo contra Falsos Positivos.
-    """
-    # Gerando um endpoint aleatório que OBRIGATORIAMENTE deve ser um 404/Inexistente
+    destacar_sessao("0", "CALIBRAGEM LLC (LOGIC LLC)")
+    status_log("Mapeando comportamento do alvo contra Falsos Positivos...")
+    
+    # Gerando um endpoint aleatório que obrigatoriamente deve ser um 404/Inexistente
     url_falsidade = f"http://{domain}/{uuid.uuid4().hex[:12]}"
     h = {'User-Agent': random.choice(UA_LIST)}
     
@@ -238,11 +303,12 @@ def calibrar_motor_llc(domain):
         status_base = r.status_code
         server_rg = r.headers.get('Server', 'Desconhecido')
         
-        # Captura uma assinatura das primeiras linhas para checar conteúdo dinâmico
+        # Avançado: Captura uma assinatura das primeiras linhas para checar conteúdo dinâmico
         # Útil se o tamanho mudar por poucos bytes (ex: um relógio ou ID na página de erro)
         trecho_conteudo = r.text[:200].strip() if r.text else ""
         
-        # Retorna o mapa completo da assinatura de erro do servidor
+        status_log(f"Assinatura LLC capturada: {tamanho_base} bytes | Status: {status_base} | Server: {server_rg}")
+        
         return {
             "ativo": True,
             "tamanho": tamanho_base,
@@ -252,7 +318,7 @@ def calibrar_motor_llc(domain):
         }
         
     except requests.exceptions.RequestException as e:
-        # Captura uma falha ao calibrar motor LLC (Alvo inacessível ou bloqueando)
+        status_log(f"Falha ao calibrar motor LLC (Alvo inacessível ou bloqueando): {e}", "FAIL")
         return {
             "ativo": False,
             "tamanho": 0,
@@ -260,170 +326,7 @@ def calibrar_motor_llc(domain):
             "server": "Desconhecido",
             "trecho_erro": ""
         }
-
-def analisador_profundo(html):
-    """
-    Analisa o HTML em busca de padrões sensíveis usando expressões regulares.
-    """
-    achados = []
-    regex_map = {
-        "CRITICAL_LFI": r"root:x:0:0",
-        "CRITICAL_RCE": r"(uid=[0-9]+\(.+?\))",
-        "DB_STR": r"(?:mongodb\+srv|postgres|mysql|redis)://[\w.-]+(?::\d+)?/[^\s'\"]+",
-        "API_KEY": r"(?:api|secret|token|key|pass)[-]?(?:\s*=\s*|:\s*)['\"]([a-zA-Z0-9\-]{10,45})['\"]",
-        "AWS_AUTH": r"AKIA[0-9A-Z]{16}",
-        "JWT_TOKEN": r"eyJ[A-Za-z0-9-=]+\.[A-Za-z0-9-=]+\.?[A-Za-z0-9-_=]*",
-        "GOOGLE_KEY": r"AIza[0-9A-Za-z-_]{35}",
-        "STRIPE_KEY": r"sk_live_[0-9a-zA-Z]{24}",
-        "MAILGUN_KEY": r"key-[0-9a-zA-Z]{32}",
-        "TWILIO_SID": r"AC[0-9a-fA-F]{32}",
-        "GH_TOKEN": r"gh[pousr][A-Za-z0-9]{36}"
-    }
-    
-    for chave, regex in regex_map.items():
-        m = re.search(regex, html, re.IGNORECASE)
-        if m:
-            # Guarda o tipo da falha e o trecho capturado (limitado para não estourar espaço)
-            achados.append({"tipo": chave, "trecho": m.group(0)[:100]})
-            
-    return achados if achados else []
-
-def triagem_vulnerabilidade_ia(dados_achados, groq_client):
-    """
-    Aciona a inteligência artificial na nuvem para analisar se os achados
-    da Regex são reais ou falsos positivos.
-    """
-    try:
-        # Formatamos os achados para um formato de texto limpo para o prompt
-        contexto_scanner = ""
-        for item in dados_achados:
-            contexto_scanner += f"- Tipo: {item['tipo']} | Trecho Capturado: {item['trecho']}\n"
-
-        response = groq_client.chat.completions.create(
-            model="llama3-8b-8192",  # Modelo veloz ideal para triagem orientada a contexto
-            messages=[
-                {
-                    "role": "system", 
-                    "content": "Você é um perito de Red Team sênior. Avalie os achados de um scanner de vulnerabilidades automatizado. Identifique se os trechos parecem credenciais reais expostas ou vazamentos críticos ativos, ou se são apenas códigos mortos, placeholders (ex: 'YOUR_API_KEY') ou falsos positivos. Responda estritamente no formato:\n[STATUS] - Justificativa em uma frase curta.\nOnde STATUS pode ser [VALIDO] ou [FALSO POSITIVO]."
-                },
-                {
-                    "role": "user", 
-                    "content": f"Achados brutos do motor:\n{contexto_scanner}"
-                }
-            ],
-            temperature=0.1 # Temperatura baixa para manter a IA precisa e sem inventar dados
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"[ERRO CLOUD] Não foi possível validar via IA: {str(e)}"
-
-def executar_scan_no_endpoint(url, dados_calibragem, groq_client=None):
-    """
-    O CORAÇÃO DO MOTOR: Faz a requisição ao alvo, aplica as regras matemáticas 
-    da calibragem LLC para matar falsos positivos de infraestrutura, e valida o HTML.
-    """
-    h = {'User-Agent': random.choice(UA_LIST)}
-    
-    try:
-        # Executa o teste na URL de auditoria real
-        r = requests.get(url, headers=h, timeout=10, verify=False, allow_redirects=False)
-        
-        # --- FILTRO 1: COMPARAÇÃO DINÂMICA (Anti-Wildcard / Páginas Falsas) ---
-        # Se o site retorna o mesmo status e tamanho da página de erro capturada na calibragem, descarte.
-        if r.status_code == dados_calibragem["status"] and len(r.content) == dados_calibragem["tamanho"]:
-            return None 
-            
-        # Checagem de tolerância por conteúdo dinâmico (ex: páginas com relógio que mudam poucos bytes)
-        trecho_atual = r.text[:200].strip() if r.text else ""
-        if trecho_atual == dados_calibragem["trecho_erro"] and dados_calibragem["trecho_erro"] != "":
-            return None
-            
-        # --- FILTRO 2: ANALISADOR NATIVO (REGEX) ---
-        # Se passou pela calibragem, o endpoint respondeu algo diferente do padrão de erro. Vamos escanear o HTML.
-        achados_regex = analisador_profundo(r.text)
-        
-        if achados_regex:
-            # --- FILTRO 3: SEGUNDO FATOR COGNITIVO (IA NA NUVEM) ---
-            # Se a Regex encontrou algo suspeito e temos a IA configurada, enviamos para triagem de elite
-            if groq_client:
-                resultado_triagem = triagem_vulnerabilidade_ia(achados_regex, groq_client)
-                
-                # Se a IA bater o martelo que é um falso positivo, o motor descarta e não polui o log
-                if "[FALSO POSITIVO]" in resultado_triagem:
-                    return None
-                    
-                return {
-                    "url": url,
-                    "status_code": r.status_code,
-                    "achados": achados_regex,
-                    "validacao_ia": resultado_triagem
-                }
-            else:
-                # Se não houver IA ativa, retorna o achado bruto da regex normalmente
-                return {
-                    "url": url,
-                    "status_code": r.status_code,
-                    "achados": achados_regex,
-                    "validacao_ia": "IA não acionada (Triagem Cloud desativada)"
-                }
-                
-    except requests.exceptions.RequestException:
-        # Se o endpoint falhar ou cair durante o scan, o motor absorve o erro e continua
-        return None
-        
-    return None
-
-def rodar_varredura_multi_threading(domain, lista_caminhos, dados_calibragem, groq_client):
-    """
-    Orquestra a execução paralela usando a sua função 'executar_scan_no_endpoint'.
-    Lê a wordlist de diretórios e gerencia as threads no Streamlit.
-    """
-    resultados_validos = []
-    
-    # Constrói a lista completa de alvos para passar para o motor
-    urls_para_testar = [f"http://{domain}/{caminho.lstrip('/')}" for caminho in lista_caminhos]
-    
-    # Elementos visuais dinâmicos para o painel do Streamlit
-    barra_progresso = st.progress(0)
-    status_texto = st.empty()
-    container_alertas = st.container()
-    
-    total_testes = len(urls_para_testar)
-    
-    if total_testes == 0:
-        st.warning("⚠️ Nenhum caminho foi carregado para teste.")
-        return resultados_validos
-
-    # Abre o pool usando as estruturas que você importou no topo
-    with ThreadPoolExecutor(max_workers=15) as executor:
-        # Mapeia cada thread apontando diretamente para o seu motor atual
-        futuros = {
-            executor.submit(executar_scan_no_endpoint, url, dados_calibragem, groq_client): url 
-            for url in urls_para_testar
-        }
-        
-        concluidos = 0
-        for futuro in as_completed(futuros):
-            concluidos += 1
-            url_atual = futuros[futuro]
-            
-            # Atualização de status em tempo real na interface web
-            status_texto.markdown(f"🛰️ *Progresso do Motor:* [{concluidos}/{total_testes}] escaneando {url_atual}")
-            barra_progresso.progress(concluidos / total_testes)
-            
-            try:
-                resultado = futuro.result()
-                if resultado: # Se o seu motor detectou algo real e a IA validou
-                    resultados_validos.append(resultado)
-                    with container_alertas:
-                        st.error(f"🚨 *Falha Confirmada:* {resultado['url']} | Status: {resultado['status_code']}")
-                        st.json(resultado["achados"])
-            except Exception as e:
-                # Registra erros internos das threads de forma segura no terminal do Kali
-                print(f"[Erro Interno Thread] {url_atual}: {e}")
-                
-    status_texto.success(f"🏁 *Auditoria Industrial Concluída!* {len(resultados_validos)} vulnerabilidades reais isoladas.")
-    return resultados_validos
+# --------------------------------------------------------------------------------
 # SESSÕES OPERACIONAIS DE AUDITORIA
 # --------------------------------------------------------------------------------
 
@@ -551,69 +454,60 @@ def s2_geo_infra(dom):
             st.warning(f"⚠️ Dados de geolocalização indisponíveis: {e}")
             return ip_address
 def s3_fingerprint_tecnologico(dom):
-    """
-    SESSÃO 3: Fingerprint Tecnológico & Banner Grabbing.
-    Identifica de forma precisa servidores, tecnologias de borda, WAF e CDN.
-    """
     st.markdown("### 🔍 Sessão 3: Fingerprint e Banner Grabbing")
     st.info("Interrogando cabeçalhos HTTP para identificar WAF, CDN e Infraestrutura...")
     
-    # Seleção aleatória de User-Agent usando a lista global do topo do arquivo
+    # Lista de User-Agents para rotacionar (Profissional)
+    UA_LIST = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+    ]
+    
     headers = {'User-Agent': random.choice(UA_LIST)}
     
     try:
-        # Sanitização rápida da URL para evitar quebras no requests
-        url_alvo = f"http://{dom}" if not dom.startswith(("http://", "https://")) else dom
-        
-        # Requisição de auditoria com timeout curto e SSL flexível
-        r = requests.get(url_alvo, timeout=5, verify=False, headers=headers)
+        # Requisição segura ignorando SSL inválido
+        r = requests.get(f"http://{dom}", timeout=5, verify=False, headers=headers)
         
         server = r.headers.get('Server', 'Não detectado')
         pow_by = r.headers.get('X-Powered-By', 'Não detectado')
         
-        # --- EXIBIÇÃO DOS BANNERS DO SERVIDOR ---
+        # Exibição dos Banners do Servidor
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="🖥️ Servidor (Banner)", value=server)
         with col2:
             st.metric(label="⚙️ Tecnologia Base", value=pow_by)
             
-        # --- DETECÇÃO DE WAF / PROTEÇÕES ---
+        # Detecção de WAF / Proteções
         waf_hits = []
-        headers_str = "".join(r.headers.keys()).lower()
         
-        # Varredura de assinaturas de cabeçalho (Mapeamento Industrial)
-        if any(h in headers_str for h in ["x-vercel-id", "x-vercel-cache"]):
+        # Converte cabeçalhos para string única para busca rápida
+        headers_str = "".join(r.headers.keys())
+        
+        if any(h in headers_str for h in ["X-Vercel-Id", "X-Vercel-Cache"]):
             waf_hits.append("Vercel Edge")
-        if "cf-ray" in r.headers:
+        if "CF-RAY" in r.headers:
             waf_hits.append("Cloudflare WAF / CDN")
-        if "x-akamai-transformed" in r.headers:
+        if "X-Akamai-Transformed" in r.headers:
             waf_hits.append("Akamai WAF")
         if "x-amz-id-2" in r.headers:
             waf_hits.append("AWS S3 / CloudFront")
             
-        # --- PAINEL DE ANÁLISE DE BORDA ---
         st.markdown("#### 🛡️ Análise de Proteção de Borda (WAF/CDN)")
         if waf_hits:
             for waf in waf_hits:
-                st.warning(f"⚠️ WAF/INFRA DETECTADA: {waf}")
+                st.warning(f"🎯 *WAF/INFRA DETECTADA:* {waf}")
         else:
-            st.success("🟢 PROTEÇÃO WAF: Nenhuma assinatura óbvia de WAF/CDN foi identificada nos cabeçalhos padrão.")
+            st.success("✅ *PROTEÇÃO WAF:* Nenhuma assinatura óbvia de WAF/CDN foi identificada nos cabeçalhos padrão.")
             
-        # --- EXPANDER COM OS CABEÇALHOS COMPLETOS ---
-        with st.expander("📂 Ver todos os cabeçalhos HTTP brutos (Headers)"):
+        # Expander com os cabeçalhos completos (Excelente para análise minuciosa)
+        with st.expander("Ver todos os cabeçalhos HTTP brutos (Headers)"):
             st.json(dict(r.headers))
             
-        # Retorna o dicionário populado para o estado do painel (v37.0)
-        return {
-            "servidor": server,
-            "tecnologia": pow_by,
-            "protecoes": waf_hits if waf_hits else ["Nenhuma detectada"]
-        }
-        
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Erro ao conectar no alvo para Fingerprint: {e}")
-        return None
+    except Exception as e:
+        st.error(f"❌ Erro ao realizar fingerprinting no alvo: {e}")
 def s4_owasp_headers(dom):
     st.markdown("### 🛡️ Sessão 4: Cabeçalhos de Segurança (OWASP Top 10)")
     st.info("Validando políticas contra Injeção, XSS, Clickjacking e HSTS...")
@@ -669,114 +563,108 @@ def s4_owasp_headers(dom):
 
     except Exception as e:
         st.error(f"❌ Erro ao validar cabeçalhos OWASP no alvo: {e}")
-# MOTOR DE FUZZING PARALELO INDUSTRIAL (PADRÃO ELITE)
-# =====================================================================
-
-def core_fuzzing_worker(url, cal, secao, timeout_global=15):
-    """
-    Trabalhador focado em fazer a requisição de forma limpa e isolada,
-    evitando poluição de variáveis globais.
-    """
-    fake_ip = f"{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
-    headers = {
-        'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        'X-Forwarded-For': fake_ip,
-        'Client-IP': fake_ip
-    }
-    
+def core_fuzzing_worker(url, cal, secao):
     try:
-        r = requests.get(url, headers=headers, timeout=timeout_global, verify=False, allow_redirects=False)
+        fake_ip = f"{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
         
-        if r.status_code in [301, 302, 307, 308, 404]:
+        headers = {
+            'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            'X-Forwarded-For': fake_ip
+        }
+        
+        timeout_req = TIMEOUT_GLOBAL if 'TIMEOUT_GLOBAL' in globals() else 5
+        
+        r = requests.get(url, headers=headers, timeout=timeout_req, verify=False, allow_redirects=False)
+        
+        if r.status_code in [301, 302, 307, 308]:
             return None
             
         if r.status_code == 200:
             t_atual = len(r.content) if r.content else 0
-            tamanho_base = cal.get("tamanho", 0)
+            margem_waf = cal.get("tamanho", 0) * 0.15
             
-            # Margem dinâmica calibrada (15% de variação tolerada)
-            margem_waf = tamanho_base * 0.15
-            
-            if t_atual < 100 or abs(t_atual - tamanho_base) <= margem_waf:
+            if t_atual < 100 or (cal.get("ativo") and abs(t_atual - cal.get("tamanho", 0)) <= margem_waf):
                 return None
                 
-            # Dispara análise de assinaturas locais se a função existir
             segredos = analisador_profundo(r.text) if 'analisador_profundo' in globals() else []
             
             return {
                 "secao": secao,
                 "url": url,
-                "status_code": r.status_code,
-                "tipo": "Vazamento Estrutural" if segredos else "Diretório/Arquivo Real Exposto",
-                "detalhe": f"Tamanho: {t_atual} bytes | {len(segredos)} assinaturas detectadas.",
-                "segredos": ", ".join(segredos) if segredos else "Nenhum"
+                "tipo": "Vazamento estrutural.",
+                "detalhe": "Diretório/Arquivo Real exposto.",
+                "classe": "Fuzzing Validado",
+                "segredos": segredos
             }
             
-    except requests.exceptions.RequestException:
+    except Exception:
         pass
+        
     return None
+def s5_6_7_multi_fuzz(dom, cal):
+    # Importação local forçada para eliminar o NameError de vez
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import streamlit as st
 
-
-def s5_6_7_multi_fuzz(dom, cal, threads_motor=10):
-    """
-    Orquestrador otimizado: Processa em lote para não congelar o Streamlit
-    e monta a lista de tarefas usando o session_state isolado por usuário.
-    """
-    st.markdown("### 🛠️ Motor de Fuzzing Paralelo Industrial")
+    st.markdown("### 🛠️ Sessão 5/6/7: Motor de Fuzzing Paralelo (Camaleão)")
     
-    # Puxa os dados com segurança do session_state do usuário atual
-    w_dir = st.session_state.wordlist_diretorios
-    w_api = st.session_state.wordlist_api
-    w_nuv = st.session_state.wordlist_nuvem
+    threads_motor = THREADS_MOTOR if 'THREADS_MOTOR' in globals() else 10
+    wl_dir = WL_DIR if 'WL_DIR' in globals() else []
+    wl_api = WL_API if 'WL_API' in globals() else []
+    wl_nuvem = WL_NUVEM if 'WL_NUVEM' in globals() else []
     
-    full_list = []
-    for p in w_dir: full_list.append((p, "DIRETÓRIO"))
-    for p in w_api: full_list.append((p, "API"))
-    for p in w_nuv: full_list.append((p, "CLOUD"))
+    full_list = (
+        [(p, "DIRETÓRIO") for p in wl_dir] + 
+        [(p, "API") for p in wl_api] + 
+        [(p, "CLOUD") for p in wl_nuvem]
+    )
     
     if not full_list:
-        st.warning("⚠️ Nenhuma wordlist válida foi fornecida ou carregada.")
+        st.warning("⚠️ Nenhuma wordlist carregada para processamento.")
         return []
-        
-    st.info(f"🚀 Iniciando varredura híbrida com {threads_motor} threads sobre {len(full_list)} caminhos...")
+
+    st.info(f"Iniciando auditoria industrial com {threads_motor} threads paralelas sobre {len(full_list)} caminhos...")
     
     resultados_fuzzing = []
-    
-    # Componentes visuais do Streamlit
-    barra_progresso = st.progress(0.0)
+    progresso = st.progress(0.0)
     status_texto = st.empty()
     tabela_placeholder = st.empty()
-    
-    total_tarefas = len(full_list)
-    
+
     with ThreadPoolExecutor(max_workers=threads_motor) as ex:
+        # Envia as tarefas usando o core_fuzzing_worker que já foi refatorado
         futuros = {
-            ex.submit(core_fuzzing_worker, f"http://{dom}/{path.lstrip('/')}", cal, tipo): (path, tipo)
+            ex.submit(core_fuzzing_worker, f"http://{dom}/{path}", cal, tipo): (path, tipo)
             for path, tipo in full_list
         }
         
+        total_tarefas = len(futuros)
+        
+        # Chamada direta e garantida pelo import local
         for i, futuro in enumerate(as_completed(futuros)):
             try:
                 resultado = futuro.result()
                 if resultado:
-                    resultados_fuzzing.append(resultado)
-                    # SÓ ATUALIZA A TELA SE ACHAR ALGO REAL (Ganho brutal de velocidade)
+                    resultados_fuzzing.append({
+                        "Tipo": resultado["secao"],
+                        "URL": resultado["url"],
+                        "Classificação": resultado["classe"],
+                        "Segredos": ", ".join(resultado["segredos"]) if resultado["segredos"] else "Nenhum"
+                    })
                     tabela_placeholder.dataframe(resultados_fuzzing, use_container_width=True)
             except Exception:
                 pass
-                
-            # Atualização da barra de progresso controlada
-            percentual = (i + 1) / total_tarefas
-            barra_progresso.progress(percentual)
-            status_texto.text(f"Auditando caminhos: {i + 1}/{total_tarefas} verificados...")
             
+            percentual = (i + 1) / total_tarefas
+            progresso.progress(percentual)
+            status_texto.text(f"Auditando: {i + 1}/{total_tarefas} caminhos verificados...")
+
     status_texto.empty()
-    barra_progresso.empty()
+    progresso.empty()
     
     if resultados_fuzzing:
-        st.error(f"🚨 Fuzzing Finalizado: Foram encontrados {len(resultados_fuzzing)} caminhos reais expostos!")
+        st.error(f"🚨 *Fuzzing Finalizado:* Foram encontrados {len(resultados_fuzzing)} caminhos reais expostos!")
     else:
-        st.success("✅ Fuzzing Finalizado: Nenhum diretório sensível exposto foi detectado.")
+        st.success("✅ *Fuzzing Finalizado:* Nenhum diretório exposto detectado.")
         
     return resultados_fuzzing
 def s8_port_scanner(dom):
@@ -1473,32 +1361,17 @@ def main():
         st.session_state['alvo_atual'] = 'exemplo.com'
 
     if st.button("Finalizar Auditoria"):
-        try:
+       try:
             alvo = st.session_state['alvo_atual']
-            
-            # 1. Constrói o log base da ferramenta
-            conteudo_base = f"[+] Auditoria concluida para {alvo} em {datetime.now()}\n"
-            
-            # Coloque aqui a chamada para coletar seus logs locais reais se necessário
-            # Exemplo: log_completo = conteudo_base + seu_log_de_vulnerabilidades
-            log_completo = conteudo_base
-            
-            # 2. Dispara a análise inteligente para a Groq na nuvem
-            with st.spinner("IA analisando os logs do alvo..."):
-                relatorio_ia = analisar_logs_via_nuvem(log_completo, alvo)
-            
-            # 3. Exibe o relatório executivo com design profissional no painel
-            st.markdown(relatorio_ia)
-            
-            # 4. Disponibiliza o download do relatório completo gerado pela IA
-            st.download_button(
-                label="💾 Baixar Relatório",
-                data=relatorio_ia,
-                file_name=f"relatorio_executivo_{alvo}.txt",
-                mime="text/plain"
-            )
-            
-        except Exception as e:
-            st.error(f"⚠️ Erro na finalização: {e}")
+            # Construa seu log real aqui
+            conteudo_base = f"[+] Auditoria concluída para {alvo} em {datetime.now()}\n"
+        
+            # Agora passando os 3 argumentos necessários:
+            relatorio = s10_log_final(alvo, conteudo_base, conteudo_base)
+        
+            st.download_button("💾 Baixar Relatório", relatorio, "report.txt")
+       except Exception as e:
+            st.error(f"Erro na finalização: {e}")
+
 if __name__ == "__main__":
     main()
