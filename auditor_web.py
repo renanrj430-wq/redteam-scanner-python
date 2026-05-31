@@ -1,7 +1,8 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FERRAMENTA: RED TEAM AUDITOR PRO - V37.0 (INDUSTRIAL ENGINE)
+FERRAMENTA: RED TEAM AUDITOR PRO - V38.0 (INDUSTRIAL ENGINE)
 AUTOR: (@renan_security_researcher)
 LOCALIZAÇÃO: RIO DE JANEIRO, BR | 2026
 TECNOLOGIA: LLC TECHNOLOGY (LOGIC LLC) | OFFENSIVE SECURITY
@@ -47,44 +48,65 @@ if "wordlist_nuvem" not in st.session_state:
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 shodan_client = Shodan(os.getenv("SHODAN_API_KEY"))
 
-# --- 1. FUNÇÃO DA IA (Motor) ---
-def analisar_logs_via_nuvem(relatorio, alvo):
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        return "Erro: Chave GROQ_API_KEY não configurada no arquivo .env"
-        
+# =====================================================================
+# --- I. FUNÇÃO DA IA (Motor na Nuvem) ---
+# =====================================================================
+def analisar_logs_via_nuvem(log_comple, alvo):
     try:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            return {"erro": "Chave GROQ_API_KEY não configurada no arquivo .env"}
+
         client = Groq(api_key=api_key)
-        
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "user", 
-                    "content": (
-                        f"Você é um Auditor de Segurança Sênior (Red Team). Analise o seguinte log do alvo '{alvo}' "
-                        f"e gere um Relatório Executivo de Segurança estruturado exatamente com os seguintes tópicos em Markdown:\n\n"
-                        f"### 📋 RESUMO DA ATIVIDADE\n(Informar data, hora, alvo e se a execução foi concluída com sucesso baseado no log)\n\n"
-                        f"### 🔍 ANÁLISE CRÍTICA (CONTEXTO DE SEGURANÇA)\n(Avaliar o comportamento do log. Identificar possíveis falhas, anomalias ou falta de informações cruciais para auditoria)\n\n"
-                        f"### ⚠️ NÍVEL DE RISCO ESTIMADO\n(Classificar em Baixo, Médio, Alto ou Crítico e justificar curto)\n\n"
-                        f"### 🛡️ RECOMENDAÇÕES RESTRITAS\n(Passar de 2 a 3 ações corretivas para melhorar a segurança)\n\n"
-                        f"Log para análise: {relatorio}"
-                    )
-                }
+
+        prompt_sistema = (
+            "Você é um Auditor Executivo de Segurança Cibernética Sênior.\n"
+            "Sua tarefa é analisar os logs fornecidos e gerar um relatório técnico detalhado sobre o alvo.\n"
+            "REGRAS CRÍTICAS:\n"
+            "1. Baseie-se estritamente nos logs fornecidos. Nunca invente portas ou vulnerabilidades que não estejam nos dados.\n"
+            "2. Identifique claramente o alvo fornecido e associe todas as descobertas a ele.\n"
+            "3. Classifique minuciosamente os riscos encontrados (BAIXO, MÉDIO ou ALTO) e detalhe o impacto técnico de cada um.\n"
+            "4. Forneça recomendações de mitigação acionáveis para cada falha encontrada.\n"
+            "5. Você deve responder OBRIGATORIAMENTE no formato JSON especificado abaixo, sem qualquer texto antes ou depois."
+        )
+
+        estrutura_json_esperada = {
+            "alvo": "IP ou Domínio analisado",
+            "resumo_executivo": "Insira o resumo executivo e contexto de segurança aqui",
+            "nivel_risco_geral": "BAIXO, MEDIO ou ALTO",
+            "portas_e_servicos": [
+                {"porta": "Número", "servico": "Nome do serviço", "versao": "Versão detectada"}
             ],
-            stream=True
+            "vulnerabilidades_detectadas": [
+                {
+                    "vulnerabilidade": "Nome da falha",
+                    "severidade": "BAIXO, MEDIO ou ALTO",
+                    "detalhes_tecnicos": "Descrição detalhada do risco encontrado com base nos logs",
+                    "mitigacao": "Recomendações detalhadas para corrigir o problema"
+                }
+            ]
+        }
+
+        prompt_sistema_completo = f"{prompt_sistema}\n\nSua resposta deve seguir estritamente este modelo JSON:\n{json.dumps(estrutura_json_esperada, ensure_ascii=False)}"
+
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": prompt_sistema_completo},
+                {"role": "user", "content": f"Alvo da análise: {alvo}\n\nLogs coletados:\n{log_comple}"}
+            ],
+            temperature=0.1,
+            max_tokens=3000,
+            response_format={"type": "json_object"},
+            stream=False
         )
         
-        resposta_completa = ""
-        for chunk in completion:
-            texto_chunk = chunk.choices[0].delta.content or ""
-            resposta_completa += texto_chunk
-            
-        return resposta_completa
-        
-    except Exception as e:
-        return f"Erro de conexão nuvem: {e}"
+        # Converte a string JSON purificada diretamente para um dicionário Python
+        relatorio_final = json.loads(completion.choices[0].message.content)
+        return relatorio_final
 
+    except Exception as e:
+        return {"erro": f"Falha ao gerar ou processar o relatório: {str(e)}"}
 # 1. Configurações Globais de Constantes (Imutáveis)
 NICK = "renan_security_researcher"
 VERSAO = "38.0"
@@ -180,14 +202,14 @@ def obter_api_shodan():
     st.markdown("### 🔑 Configuração da API Shodan")
     st.info("Insira sua chave caso queira enriquecer a auditoria com dados de inteligência de ameaças. Deixe em branco para pular.")
     
-    # Todo este bloco do text_input fica alinhado exatamente na mesma linha (4 espaços para dentro)
+    
     chave_digitada = st.text_input(
         "Sua Shodan API Key (Opcional):",
         type="password",
         placeholder="Cole sua chave aqui ou deixe vazio para ignorar..."
     ).strip()
     
-    # O return precisa estar exatamente no mesmo alinhamento das variáveis acima
+    
     return chave_digitada
 def s0_inteligencia_shodan(dom):
     st.markdown("---")
@@ -906,22 +928,37 @@ def s9_cookies_session(dom):
     except Exception as e:
         st.error(f"❌ Erro ao realizar análise de cookies e sessão no alvo: {e}")
 
-# --- SESSÃO 10 (Interface e Relatório) ---
-def s10_log_final(dom, conteudo_base, relatorio):
-    st.markdown("### 🏁 Sessão 10: Finalização e Relatório de Auditoria")
+# =====================================================================
+# === SESSÃO 10: FINALIZAÇÃO E RELATÓRIO EXECUTIVO DA IA (COMPLETO) ===
+def s10_log_final(alvo, log_completo, relatorio):
+    # 1. Spinner para indicar processamento
+    with st.spinner("🤖 IA processando dados..."):
+        dados = analisar_logs_via_nuvem(log_completo, alvo)
+
+    # 2. DEBUG: Se isto não aparecer na tela, a função está retornando vazio ou erro
+    if not dados:
+        st.error("ERRO: A função de nuvem retornou um dicionário vazio ou None.")
+        return
     
-    with st.spinner("IA processando análise de segurança..."):
-        # Chamada da IA passando os dados reais (ajustado dom/alvo e corrigido o typo)
-        resultado_ia = analisar_logs_via_nuvem(relatorio, dom)
-        
-    conteudo_final = (f"{conteudo_base}\n\n"
-                      f"=== ANÁLISE EXECUTIVA DE SEGURANÇA (IA) ===\n"
-                      f"{resultado_ia}")
+    # Exibe o dicionário bruto para você ter certeza do que a IA está mandando
+    with st.expander("🔍 Ver dados brutos (Debug)"):
+        st.write(dados)
+
+    # 3. RENDERIZAÇÃO DOS DADOS (Agora que sabemos que 'dados' é um dict)
+    st.markdown("---")
+    st.subheader("📊 Relatório de Auditoria")
     
-    st.info("✅ Análise executiva integrada.")
-    st.code(conteudo_final, language="text")
+    # Acessando as chaves que você definiu na sua nuvem
+    # Ajuste os nomes das chaves conforme o que aparecer no DEBUG acima
+    st.metric("Alvo Identificado", dados.get("alvo", "Não informado"))
     
-    return conteudo_final
+    st.markdown("### 📝 Análise Técnica")
+    st.info(dados.get("resumo_executivo", "Sem resumo disponível."))
+    
+    st.markdown("### ⚠️ Nível de Risco")
+    st.warning(dados.get("nivel_risco_geral", "Sem classificação."))
+
+    st.success("Fim do relatório.")
 # --------------------------------------------------------------------------------
 # SESSÕES DE PÓS-EXPLORAÇÃO E AUXILIARES
 # --------------------------------------------------------------------------------
@@ -1344,26 +1381,45 @@ def s16_ct_logs_discovery(dom):
 # BANNER E FLUXO PRINCIPAL
 # --------------------------------------------------------------------------------
 def main():
-    # Estilização da barra lateral e metadados do auditor
+    # --- 1. ESTILIZAÇÃO DA BARRA LATERAL E METADADOS DOS LOGS ---
     st.sidebar.markdown(f"Pesquisador: {NICK}")
     st.sidebar.markdown(f"Versão: {VERSAO}")
-    st.sidebar.markdown(f"Início: {st.session_state.hora_inicio}")    
-    # Caixa de seleção para controle da Sessão 11 (Evita NameError)
-    activar_hash_audit = st.sidebar.checkbox("🧬 Incluir Identificador de Hash (Sessão 11)", value=True)
-
+    st.sidebar.markdown(f"Início: {st.session_state.hora_inicio}")
+    activar_hash_audit = st.sidebar.checkbox("📂 Incluir Identificador de Hash (Sessão 11)", value=True)
+    
     st.markdown("---")
-    # Entrada principal do alvo na interface do Streamlit
-    alvo_raw = st.text_input("🎯 Defina o alvo (URL/IP):", placeholder="exemplo.com")
 
-    if st.button("🚀 Iniciar Auditoria Industrial Completa"):
-        if not alvo_raw:
-            st.error("Por favor, insira um alvo para começar.")
-        else:
-            # Sanitização rigorosa do input para extrair apenas o domínio/host
-            dom = alvo_raw.replace("https://", "").replace("http://", "").split('/')[0].strip()
-            
-            # Gerenciador de status dinâmico do Streamlit
-            with st.status(f"🚀 Auditoria em progresso: {dom}...", expanded=True) as status:
+    # --- 2. ENTRADA UNIFICADA DO ALVO INTEGRADA COM A SESSÃO 10 ---
+    # Busca o valor existente ou define o padrão seguro
+    alvo_salvo = st.session_state.get('url_alvo', '')
+    if not alvo_salvo:
+        alvo_salvo = "exemplo.com"
+
+    # O próprio Streamlit grava na memória automaticamente através do parâmetro key
+    st.text_input(
+        "Defina o Alvo (URL/IP):", 
+        value=alvo_salvo, 
+        key='url_alvo'
+    )
+
+    # --- 3. BOTÃO DE INICIALIZAÇÃO E SANITIZAÇÃO ---
+    if st.button("Iniciar Auditoria Industrial Completa"):
+        
+        # Puxa o dado digitado direto da chave gerenciada pelo widget
+        alvo_bruto = st.session_state.get('url_alvo', '').strip()
+        
+        if not alvo_bruto or alvo_bruto == "exemplo.com" or alvo_bruto == "":
+            st.error("🚨 Por favor, insira um alvo válido para começar.")
+            st.stop()
+        
+        # Faz a limpeza dos protocolos e caminhos extras
+        dom = alvo_bruto.replace("https://", "").replace("http://", "").split('/')[0].strip()
+        
+        # Guardamos o domínio limpo em outra chave segura para uso das ferramentas internas
+        st.session_state['alvo_limpo'] = dom
+        
+        # Dispara o gerenciador de status nativo do Streamlit usando o domínio higienizado
+        with st.status(f"🔎 Auditoria em progresso: {dom}...", expanded=True) as status:
                 
                 # --- FASE 1: INTELIGÊNCIA PRÉVIA & RECON ---
                 status.update(label="🔍 Fase 1: Consultando Inteligência (Shodan)...", state="running")
@@ -1464,41 +1520,51 @@ def main():
                 except Exception as e:
                       st.error(f"⚠️ Erro na Sessão 11 (Hash): {e}")
 
-
-# === SESSÃO FINAL: PROCESSAMENTO DO STATUS E LOGS ===
-    st.title("Auditor Web Pro")
-    
-    # Exemplo de estado de sessão
-    if 'alvo_atual' not in st.session_state:
-        st.session_state['alvo_atual'] = 'exemplo.com'
-
+# --- SESSÃO FINAL: BOTÃO DE FINALIZAÇÃO ---
     if st.button("Finalizar Auditoria"):
-        try:
-            alvo = st.session_state['alvo_atual']
-            
-            # 1. Constrói o log base da ferramenta
-            conteudo_base = f"[+] Auditoria concluida para {alvo} em {datetime.now()}\n"
-            
-            # Coloque aqui a chamada para coletar seus logs locais reais se necessário
-            # Exemplo: log_completo = conteudo_base + seu_log_de_vulnerabilidades
-            log_completo = conteudo_base
-            
-            # 2. Dispara a análise inteligente para a Groq na nuvem
-            with st.spinner("IA analisando os logs do alvo..."):
-                relatorio_ia = analisar_logs_via_nuvem(log_completo, alvo)
-            
-            # 3. Exibe o relatório executivo com design profissional no painel
-            st.markdown(relatorio_ia)
-            
-            # 4. Disponibiliza o download do relatório completo gerado pela IA
-            st.download_button(
-                label="💾 Baixar Relatório",
-                data=relatorio_ia,
-                file_name=f"relatorio_executivo_{alvo}.txt",
-                mime="text/plain"
-            )
-            
-        except Exception as e:
-            st.error(f"⚠️ Erro na finalização: {e}")
+        # 1. Recupera as informações essenciais
+        alvo = st.session_state.get('url_alvo', '')
+        log_completo = st.session_state.get('logs_completos', '')
+
+        # 2. Executa a função e SALVA O RESULTADO na sessão (para não sumir)
+        with st.spinner("🤖 IA processando dados..."):
+            dados = analisar_logs_via_nuvem(log_completo, alvo)
+            st.session_state['relatorio_dados'] = dados
+
+    # 3. EXIBIÇÃO: Verifica se há dados na sessão e renderiza
+    if 'relatorio_dados' in st.session_state and st.session_state['relatorio_dados']:
+        dados = st.session_state['relatorio_dados']
+        
+        # Chama a função de exibição que desenha o relatório na tela
+        # Note: removi a chamada da nuvem de dentro da função, 
+        # pois já processamos acima
+        renderizar_relatorio(dados)
+
+# --- FUNÇÃO AUXILIAR DE RENDERIZAÇÃO (Coloque fora do main) ---
+def renderizar_relatorio(dados):
+    st.markdown("---")
+    st.subheader("📊 Relatório de Auditoria")
+    st.metric("Alvo Identificado", dados.get("alvo", "Não informado"))
+    
+    st.markdown("### 📝 Análise Técnica")
+    st.info(dados.get("resumo_executivo", "Sem resumo."))
+    
+    st.markdown("### ⚠️ Nível de Risco")
+    st.warning(dados.get("nivel_risco_geral", "Sem classificação."))
+    
+    # --- NOVO BLOCO PARA VULNERABILIDADES E REMEDIAÇÕES ---
+    st.markdown("### 🛡️ Vulnerabilidades Detectadas")
+    vulns = dados.get("vulnerabilidades_detectadas", [])
+    
+    if vulns:
+        for v in vulns:
+            with st.expander(f"Falha: {v.get('vulnerabilidade', 'Desconhecido')}"):
+                st.write(f"**Severidade:** {v.get('severidade', 'N/A')}")
+                st.write(f"**Detalhes:** {v.get('detalhes_tecnicos', 'N/A')}")
+                st.write(f"**✅ Remediação:** {v.get('mitigacao', 'N/A')}")
+    else:
+        st.write("Nenhuma vulnerabilidade específica detectada nos logs.")
+
+    st.success("Fim do relatório.")
 if __name__ == "__main__":
     main()
