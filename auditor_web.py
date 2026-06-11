@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -26,7 +25,9 @@ import threading
 import hashlib
 import subprocess
 from groq import Groq
+from fpdf import FPDF
 from shodan import Shodan
+from modulos.inteligencia import analisar_logs_via_nuvem
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -51,62 +52,73 @@ shodan_client = Shodan(os.getenv("SHODAN_API_KEY"))
 # =====================================================================
 # --- I. FUNÇÃO DA IA (Motor na Nuvem) ---
 # =====================================================================
-def analisar_logs_via_nuvem(log_comple, alvo):
-    try:
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            return {"erro": "Chave GROQ_API_KEY não configurada no arquivo .env"}
 
-        client = Groq(api_key=api_key)
+import unicodedata
+from fpdf import FPDF
 
-        prompt_sistema = (
-            "Você é um Auditor Executivo de Segurança Cibernética Sênior.\n"
-            "Sua tarefa é analisar os logs fornecidos e gerar um relatório técnico detalhado sobre o alvo.\n"
-            "REGRAS CRÍTICAS:\n"
-            "1. Baseie-se estritamente nos logs fornecidos. Nunca invente portas ou vulnerabilidades que não estejam nos dados.\n"
-            "2. Identifique claramente o alvo fornecido e associe todas as descobertas a ele.\n"
-            "3. Classifique minuciosamente os riscos encontrados (BAIXO, MÉDIO ou ALTO) e detalhe o impacto técnico de cada um.\n"
-            "4. Forneça recomendações de mitigação acionáveis para cada falha encontrada.\n"
-            "5. Você deve responder OBRIGATORIAMENTE no formato JSON especificado abaixo, sem qualquer texto antes ou depois."
-        )
+def normalizar_texto(texto):
+    """Remove acentos e caracteres incompatíveis com o PDF padrão."""
+    if not texto:
+        return ""
+    string_limpa = unicodedata.normalize('NFKD', str(texto)).encode('ASCII', 'ignore').decode('ASCII')
+    return string_limpa
 
-        estrutura_json_esperada = {
-            "alvo": "IP ou Domínio analisado",
-            "resumo_executivo": "Insira o resumo executivo e contexto de segurança aqui",
-            "nivel_risco_geral": "BAIXO, MEDIO ou ALTO",
-            "portas_e_servicos": [
-                {"porta": "Número", "servico": "Nome do serviço", "versao": "Versão detectada"}
-            ],
-            "vulnerabilidades_detectadas": [
-                {
-                    "vulnerabilidade": "Nome da falha",
-                    "severidade": "BAIXO, MEDIO ou ALTO",
-                    "detalhes_tecnicos": "Descrição detalhada do risco encontrado com base nos logs",
-                    "mitigacao": "Recomendações detalhadas para corrigir o problema"
-                }
-            ]
-        }
-
-        prompt_sistema_completo = f"{prompt_sistema}\n\nSua resposta deve seguir estritamente este modelo JSON:\n{json.dumps(estrutura_json_esperada, ensure_ascii=False)}"
-
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": prompt_sistema_completo},
-                {"role": "user", "content": f"Alvo da análise: {alvo}\n\nLogs coletados:\n{log_comple}"}
-            ],
-            temperature=0.1,
-            max_tokens=3000,
-            response_format={"type": "json_object"},
-            stream=False
-        )
-        
-        # Converte a string JSON purificada diretamente para um dicionário Python
-        relatorio_final = json.loads(completion.choices[0].message.content)
-        return relatorio_final
-
-    except Exception as e:
-        return {"erro": f"Falha ao gerar ou processar o relatório: {str(e)}"}
+def gerar_pdf_relatorio(dados_auditoria, dominio_alvo):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # 1. Cabeçalho
+    pdf.set_font("Helvetica", "B", 16)
+    titulo = normalizar_texto(f"Relatorio de Auditoria Digital - {dominio_alvo}")
+    pdf.cell(0, 10, titulo, ln=True, align="C")
+    pdf.ln(5)
+    
+    # Nível de Risco Geral
+    pdf.set_font("Helvetica", "B", 12)
+    risco = dados_auditoria.get("nivel_risco_geral", "MEDIO")
+    texto_risco = normalizar_texto(f"Classificacao de Risco Geral: {risco}")
+    pdf.cell(0, 8, texto_risco, ln=True)
+    pdf.ln(3)
+    
+    # 2. Resumo Executivo
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "1. Resumo Executivo:", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    resumo = normalizar_texto(dados_auditoria.get("resumo_executivo", "Nenhum dado fornecido."))
+    pdf.multi_cell(0, 6, resumo)
+    pdf.ln(5)
+    
+    # 3. Listagem de Vulnerabilidades
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "2. Vulnerabilidades Analisadas:", ln=True)
+    
+    vulnerabilidades = dados_auditoria.get("vulnerabilidades_detectadas", [])
+    
+    for v in vulnerabilidades:
+        if isinstance(v, dict):
+            pdf.set_font("Helvetica", "B", 11)
+            nome_falha = v.get("vulnerabilidade") or v.get("vulnerability") or "Falha Detectada"
+            texto_falha = normalizar_texto(f"- {nome_falha}")
+            pdf.cell(0, 8, texto_falha, ln=True)
+            
+            pdf.set_font("Helvetica", "I", 10)
+            severidade = normalizar_texto(f"Severidade: {v.get('severidade', 'N/A')}")
+            pdf.cell(0, 6, severidade, ln=True)
+            
+            pdf.set_font("Helvetica", "", 10)
+            detalhes = normalizar_texto(f"Detalhes Tecnicos: {v.get('detalhes_tecnicos', '')}")
+            mitigacao = normalizar_texto(f"Mitigacao Recomendada: {v.get('mitigacao', '')}")
+            
+            pdf.multi_cell(190, 6, detalhes)
+            pdf.multi_cell(190, 6, mitigacao)
+            pdf.ln(4)
+        elif isinstance(v, str):
+            pdf.set_font("Helvetica", "", 10)
+            pdf.multi_cell(190, 6, normalizar_texto(f"- {v}"))
+            pdf.ln(2)
+            
+    # Retorno alinhado com a raiz da função (4 espaços da parede esquerda)
+    return pdf.output(dest='S')
 # 1. Configurações Globais de Constantes (Imutáveis)
 NICK = "renan_security_researcher"
 VERSAO = "38.0"
@@ -251,9 +263,11 @@ def calibrar_motor_llc(domain):
     url_falsidade = f"http://{domain}/{uuid.uuid4().hex[:12]}"
     h = {'User-Agent': random.choice(UA_LIST)}
     
+    # Delay randômico (Jitter) para o scan não ser bloqueado logo na calibração
+    time.sleep(random.uniform(0.5, 1.5))
+    
     try:
         # Fazemos a requisição com timeout seguro e sem seguir redirects automaticamente
-        # para mapear o comportamento real do endpoint direto
         r = requests.get(url_falsidade, headers=h, timeout=10, verify=False, allow_redirects=False)
         
         tamanho_base = len(r.content) if r.content else 0
@@ -261,10 +275,8 @@ def calibrar_motor_llc(domain):
         server_rg = r.headers.get('Server', 'Desconhecido')
         
         # Captura uma assinatura das primeiras linhas para checar conteúdo dinâmico
-        # Útil se o tamanho mudar por poucos bytes (ex: um relógio ou ID na página de erro)
         trecho_conteudo = r.text[:200].strip() if r.text else ""
         
-        # Retorna o mapa completo da assinatura de erro do servidor
         return {
             "ativo": True,
             "tamanho": tamanho_base,
@@ -275,6 +287,7 @@ def calibrar_motor_llc(domain):
         
     except requests.exceptions.RequestException as e:
         # Captura uma falha ao calibrar motor LLC (Alvo inacessível ou bloqueando)
+        time.sleep(2)
         return {
             "ativo": False,
             "tamanho": 0,
@@ -283,19 +296,30 @@ def calibrar_motor_llc(domain):
             "trecho_erro": ""
         }
 
-def analisador_profundo(html):
+def calcular_similaridade(html_A, html_B):
+    """ Calcula a razão de semelhança entre dois textos (0.0 a 1.0) """
+    if not html_A or not html_B:
+        return 0.0
+    return SequenceMatcher(None, html_A, html_B).ratio()
+
+def analisador_profundo(html, assinatura_base=None):
     """
     Analisa o HTML em busca de padrões sensíveis usando expressões regulares.
     """
+    # Validação inteligente: se a página atual for 95% igual à de erro, descarta (Falso Positivo)
+    if assinatura_base and assinatura_base.get("ativo"):
+        if calcular_similaridade(assinatura_base["trecho_erro"], html[:200].strip()) > 0.95:
+            return []
+
     achados = []
     regex_map = {
         "CRITICAL_LFI": r"root:x:0:0",
         "CRITICAL_RCE": r"(uid=[0-9]+\(.+?\))",
         "DB_STR": r"(?:mongodb\+srv|postgres|mysql|redis)://[\w.-]+(?::\d+)?/[^\s'\"]+",
-        "API_KEY": r"(?:api|secret|token|key|pass)[-]?(?:\s*=\s*|:\s*)['\"]([a-zA-Z0-9\-]{10,45})['\"]",
+        "API_KEY": r"(?:api|secret|token|key|pass)[- ]?(?:\s*=\s*|:\s*)['\"]([a-zA-Z0-9_-]{10,45})['\"]",
         "AWS_AUTH": r"AKIA[0-9A-Z]{16}",
-        "JWT_TOKEN": r"eyJ[A-Za-z0-9-=]+\.[A-Za-z0-9-=]+\.?[A-Za-z0-9-_=]*",
-        "GOOGLE_KEY": r"AIza[0-9A-Za-z-_]{35}",
+        "JWT_TOKEN": r"eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.?[A-Za-z0-9-_=]*",
+        "GOOGLE_KEY": r"AIza[0-9A-Za-z_-]{35}",
         "STRIPE_KEY": r"sk_live_[0-9a-zA-Z]{24}",
         "MAILGUN_KEY": r"key-[0-9a-zA-Z]{32}",
         "TWILIO_SID": r"AC[0-9a-fA-F]{32}",
@@ -319,41 +343,53 @@ def triagem_vulnerabilidade_ia(dados_achados, groq_client):
         # Formatamos os achados para um formato de texto limpo para o prompt
         contexto_scanner = ""
         for item in dados_achados:
-            contexto_scanner += f"- Tipo: {item['tipo']} | Trecho Capturado: {item['trecho']}\n"
-
+            tipo_limpo = str(item.get('tipo', '')).strip()
+            trecho_limpo = str(item.get('trecho', '')).strip()
+            contexto_scanner += f"- Tipo: {tipo_limpo} | Trecho Capturado: {trecho_limpo}\n"
+        
+        # Chamada da API estruturada com prompt blindado dentro do bloco try
         response = groq_client.chat.completions.create(
-            model="llama3-8b-8192",  # Modelo veloz ideal para triagem orientada a contexto
+            model="llama3-8b-8192", # Modelo veloz ideal para triagem orientada a contexto
             messages=[
                 {
-                    "role": "system", 
-                    "content": "Você é um perito de Red Team sênior. Avalie os achados de um scanner de vulnerabilidades automatizado. Identifique se os trechos parecem credenciais reais expostas ou vazamentos críticos ativos, ou se são apenas códigos mortos, placeholders (ex: 'YOUR_API_KEY') ou falsos positivos. Responda estritamente no formato:\n[STATUS] - Justificativa em uma frase curta.\nOnde STATUS pode ser [VALIDO] ou [FALSO POSITIVO]."
+                    "role": "system",
+                    "content": (
+                        "Você é um perito de Red Team sênior. Avalie os achados de um scanner de vulnerabilidades automatizado. "
+                        "Identifique se os trechos são vulnerabilidades reais ou falsos positivos (como códigos de exemplo, caminhos públicos normais, ou texto estático). "
+                        "Se for um falso positivo, sua resposta OBRIGATORIAMENTE deve começar com a tag: [FALSO POSITIVO]. "
+                        "Seja extremamente direto, responda em poucas palavras."
+                    )
                 },
                 {
-                    "role": "user", 
+                    "role": "user",
                     "content": f"Achados brutos do motor:\n{contexto_scanner}"
                 }
             ],
             temperature=0.1 # Temperatura baixa para manter a IA precisa e sem inventar dados
         )
+        
         return response.choices[0].message.content
+        
     except Exception as e:
         return f"[ERRO CLOUD] Não foi possível validar via IA: {str(e)}"
-
-def executar_scan_no_endpoint(url, dados_calibragem, groq_client=None):
+def ejecutar_scan_no_endpoint(url, dados_calibragem, groq_client=None):
     """
-    O CORAÇÃO DO MOTOR: Faz a requisição ao alvo, aplica as regras matemáticas 
+    O CORAÇÃO DO MOTOR: Faz a requisição ao alvo, aplica as regras matemáticas
     da calibragem LLC para matar falsos positivos de infraestrutura, e valida o HTML.
     """
     h = {'User-Agent': random.choice(UA_LIST)}
     
     try:
+        # ADICIONADO: Delay randômico antes de tocar no endpoint (respeito ao Rate Limiting)
+        time.sleep(random.uniform(0.4, 1.2))
+        
         # Executa o teste na URL de auditoria real
         r = requests.get(url, headers=h, timeout=10, verify=False, allow_redirects=False)
         
         # --- FILTRO 1: COMPARAÇÃO DINÂMICA (Anti-Wildcard / Páginas Falsas) ---
         # Se o site retorna o mesmo status e tamanho da página de erro capturada na calibragem, descarte.
         if r.status_code == dados_calibragem["status"] and len(r.content) == dados_calibragem["tamanho"]:
-            return None 
+            return None
             
         # Checagem de tolerância por conteúdo dinâmico (ex: páginas com relógio que mudam poucos bytes)
         trecho_atual = r.text[:200].strip() if r.text else ""
@@ -373,7 +409,8 @@ def executar_scan_no_endpoint(url, dados_calibragem, groq_client=None):
                 # Se a IA bater o martelo que é um falso positivo, o motor descarta e não polui o log
                 if "[FALSO POSITIVO]" in resultado_triagem:
                     return None
-                    
+                
+                # Retorna o achado validado pela inteligência artificial
                 return {
                     "url": url,
                     "status_code": r.status_code,
@@ -389,12 +426,11 @@ def executar_scan_no_endpoint(url, dados_calibragem, groq_client=None):
                     "validacao_ia": "IA não acionada (Triagem Cloud desativada)"
                 }
                 
+        return None
+        
     except requests.exceptions.RequestException:
         # Se o endpoint falhar ou cair durante o scan, o motor absorve o erro e continua
         return None
-        
-    return None
-
 def rodar_varredura_multi_threading(domain, lista_caminhos, dados_calibragem, groq_client):
     """
     Orquestra a execução paralela usando a sua função 'executar_scan_no_endpoint'.
@@ -408,19 +444,19 @@ def rodar_varredura_multi_threading(domain, lista_caminhos, dados_calibragem, gr
     # Elementos visuais dinâmicos para o painel do Streamlit
     barra_progresso = st.progress(0)
     status_texto = st.empty()
-    container_alertas = st.container()
+    container_alerts = st.container()
     
     total_testes = len(urls_para_testar)
     
     if total_testes == 0:
         st.warning("⚠️ Nenhum caminho foi carregado para teste.")
         return resultados_validos
-
+        
     # Abre o pool usando as estruturas que você importou no topo
     with ThreadPoolExecutor(max_workers=15) as executor:
         # Mapeia cada thread apontando diretamente para o seu motor atual
         futuros = {
-            executor.submit(executar_scan_no_endpoint, url, dados_calibragem, groq_client): url 
+            executor.submit(ejecutar_scan_no_endpoint, url, dados_calibragem, groq_client): url
             for url in urls_para_testar
         }
         
@@ -430,21 +466,28 @@ def rodar_varredura_multi_threading(domain, lista_caminhos, dados_calibragem, gr
             url_atual = futuros[futuro]
             
             # Atualização de status em tempo real na interface web
-            status_texto.markdown(f"🛰️ *Progresso do Motor:* [{concluidos}/{total_testes}] escaneando {url_atual}")
+            status_texto.markdown(f"**⚡ Progresso do Motor:** `[{concluidos}/{total_testes}]` escaneando {url_atual}")
             barra_progresso.progress(concluidos / total_testes)
             
             try:
+                # Resgata o retorno da requisição de forma segura
                 resultado = futuro.result()
-                if resultado: # Se o seu motor detectou algo real e a IA validou
+                
+                # Correção: Valida se o retorno é um dicionário antes de extrair as chaves
+                if resultado is not None:
                     resultados_validos.append(resultado)
-                    with container_alertas:
-                        st.error(f"🚨 *Falha Confirmada:* {resultado['url']} | Status: {resultado['status_code']}")
-                        st.json(resultado["achados"])
+                    
+                    # Se o seu motor detectou algo real e a IA validou, joga na tela
+                    with container_alerts:
+                        st.error(f"🚨 **Falha Confirmada:** {resultado['url']} | Status: {resultado['status_code']}")
+                        st.json(resultado['achados'])
+                        
             except Exception as e:
                 # Registra erros internos das threads de forma segura no terminal do Kali
-                print(f"[Erro Interno Thread] {url_atual}: {e}")
+                print(f"[Erro Interno Thread] {url_atual}: {str(e)}")
                 
-    status_texto.success(f"🏁 *Auditoria Industrial Concluída!* {len(resultados_validos)} vulnerabilidades reais isoladas.")
+    # Finalização do painel visual após o fechamento do pool de threads
+    status_texto.success(f"▀▄ *Auditoria Industrial Concluída!* `{len(resultados_validos)}` vulnerabilidades reais isoladas.")
     return resultados_validos
 # SESSÕES OPERACIONAIS DE AUDITORIA
 # --------------------------------------------------------------------------------
@@ -1566,5 +1609,16 @@ def renderizar_relatorio(dados):
         st.write("Nenhuma vulnerabilidade específica detectada nos logs.")
 
     st.success("Fim do relatório.")
+
+# 1. Transforma o dicionário de dados no arquivo PDF físico em memória
+    arquivo_pdf_bytes = gerar_pdf_relatorio(dados, dados.get('alvo', 'alvo_analisado'))
+
+    # 2. Cria o botão para fazer o download do PDF no Streamlit
+    st.download_button(
+        label="📥 Baixar Relatório Técnico Oficial (PDF)",
+        data=bytes(arquivo_pdf_bytes),
+        file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
+        mime="application/pdf"
+    )
 if __name__ == "__main__":
     main()
