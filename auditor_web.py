@@ -788,61 +788,62 @@ def s5_6_7_multi_fuzz(dom, cal, threads_motor=10):
     e monta a lista de tarefas usando o session_state isolado por usuário.
     """
     st.markdown("### 🛠️ Motor de Fuzzing Paralelo Industrial")
-    
+
     # Puxa os dados com segurança do session_state do usuário atual
     w_dir = st.session_state.wordlist_diretorios
     w_api = st.session_state.wordlist_api
     w_nuv = st.session_state.wordlist_nuvem
-    
+
     full_list = []
     for p in w_dir: full_list.append((p, "DIRETÓRIO"))
     for p in w_api: full_list.append((p, "API"))
     for p in w_nuv: full_list.append((p, "CLOUD"))
-    
+
     if not full_list:
         st.warning("⚠️ Nenhuma wordlist válida foi fornecida ou carregada.")
         return []
-        
+
     st.info(f"🚀 Iniciando varredura híbrida com {threads_motor} threads sobre {len(full_list)} caminhos...")
-    
+
     resultados_fuzzing = []
-    
-    # Componentes visuais do Streamlit
+
+    # COMPONENTES VISUAIS FIXOS
     barra_progresso = st.progress(0.0)
     status_texto = st.empty()
-    tabela_placeholder = st.empty()
-    
+    tabela_placeholder = st.empty() 
+
     total_tarefas = len(full_list)
-    
+
     with ThreadPoolExecutor(max_workers=threads_motor) as ex:
         futuros = {
             ex.submit(core_fuzzing_worker, f"http://{dom}/{path.lstrip('/')}", cal, tipo): (path, tipo)
             for path, tipo in full_list
         }
-        
+
         for i, futuro in enumerate(as_completed(futuros)):
             try:
                 resultado = futuro.result()
                 if resultado:
                     resultados_fuzzing.append(resultado)
-                    # SÓ ATUALIZA A TELA SE ACHAR ALGO REAL (Ganho brutal de velocidade)
                     tabela_placeholder.dataframe(resultados_fuzzing, use_container_width=True)
             except Exception:
                 pass
-                
-            # Atualização da barra de progresso controlada
+
+            # CORREÇÃO 1: Usar uma variável estável para não quebrar o layout do scroll
             percentual = (i + 1) / total_tarefas
             barra_progresso.progress(percentual)
-            status_texto.text(f"Auditando caminhos: {i + 1}/{total_tarefas} verificados...")
-            
-    status_texto.empty()
-    barra_progresso.empty()
-    
+            status_texto.markdown(f"`[{i + 1}/{total_tarefas}]` caminhos verificados...")
+
+    # CORREÇÃO 2: NUNCA use .empty() aqui. 
+    # Mantemos o elemento vivo com uma mensagem de sucesso para travar a altura da página.
+    barra_progresso.progress(1.0)
+    status_texto.markdown("✨ **Varredura encerrada no motor híbrido.**")
+
     if resultados_fuzzing:
         st.error(f"🚨 Fuzzing Finalizado: Foram encontrados {len(resultados_fuzzing)} caminhos reais expostos!")
     else:
         st.success("✅ Fuzzing Finalizado: Nenhum diretório sensível exposto foi detectado.")
-        
+
     return resultados_fuzzing
 def s8_port_scanner(dom):
     st.markdown("### 🔌 Sessão 8: Varredura de Portas Operacionais")
@@ -1514,54 +1515,70 @@ def main():
                 except Exception as e:
                     st.error(f"⚠️ Erro na Sessão 4 (OWASP Headers): {e}")
 
-                # --- FASE 4: FUZZING & PORT SCANNER ---
-                status.update(label="🚙 Executando Motor de Fuzzing e Portas...", state="running")
-                try:
-                    st.write("🚙 Executando Motor de Fuzzing e Portas...")
-                    s5_6_7_multi_fuzz(dom, calibragem)
-                except Exception as e:
-                    st.error(f"⚠️ Erro no Fuzzing (5/6/7): {e}")
+# --- FASE 4: FUZZING & PORT SCANNER ---
+        status.update(label="🚙 Executando Motor de Fuzzing e Portas...", state="running")
 
-                try:
-                    s8_port_scanner(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 8 (Port Scanner): {e}")
+        # Containers estáticos para segurar o layout da Fase 4
+        bloco_fuzzing = st.container()
+        bloco_portas = st.container()
+        bloco_cookies = st.container()
 
-                try:
-                    s9_cookies_session(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 9 (Cookies): {e}")
+        try:
+            with bloco_fuzzing:
+                s5_6_7_multi_fuzz(dom, calibragem)
+        except Exception as e:
+            st.error(f"⚠️ Erro no Fuzzing (5/6/7): {e}")
 
-                 # --- FASE 5: SIMULAÇÃO DE VETORES DE AUTENTICAÇÃO & DB ---
-                status.update(label="🔑 Testando Vetores de Autenticação e Exploração...", state="running")
-                try:
-                      st.write("🔑 Testando Vetores de Autenticação e Brute-Force...")
-                      s13_bruteforce_simulation(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 13 (Brute-Force): {e}")
+        try:
+            with bloco_portas:
+                s8_port_scanner(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 8 (Port Scanner): {e}")
 
-                # --- SESSÃO 12: Auditoria de Portas Administrativas ---
-                st.write("🎚️ Executando Auditoria de Portas Administrativas (Sessão 12) ...")
-                try:
-                # Chamada direta e simples
-                   s12_privilege_escalation_auditor(dom)
-                except Exception as e:
-                   st.error(f"⚠️ Erro crítico na Sessão 12: {e}")
-                # --- SESSÃO 14: Verificação de Root MySQL ---
+        try:
+            with bloco_cookies:
+                s9_cookies_session(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 9 (Cookies): {e}")
+
+        # --- FASE 5: SIMULAÇÃO DE VETORES DE AUTENTICAÇÃO & DB ---
+        status.update(label="🔑 Testando Vetores de Autenticação e Exploração...", state="running")
+
+        # Containers estáticos para segurar o layout da Fase 5
+        bloco_auth_brute = st.container()
+        bloco_sessao_12 = st.container()
+        bloco_sessao_14 = st.container()
+
+        try:
+            with bloco_auth_brute:
+                st.write("🔑 Testando Vetores de Autenticação e Brute-Force...")
+                s13_bruteforce_simulation(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 13 (Brute-Force): {e}")
+
+        # --- SESSÃO 12: Auditoria de Portas Administrativas ---
+        try:
+            with bloco_sessao_12:
+                st.write("⚙️ Executando Auditoria de Portas Administrativas (Sessão 12) ...")
+                s12_privilege_escalation_auditor(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro crítico na Sessão 12: {e}")
+
+        # --- SESSÃO 14: Verificação de Root MySQL ---
+        try:
+            with bloco_sessao_14:
                 st.write("🗄️ Iniciando Verificação de Root MySQL (Sessão 14) ...")
-                try:
-                # Apenas chame a função passando o 'dom' diretamente
-                    s14_mysql_root_audit(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro crítico na Sessão 14 (MySQL Audit): {e}")
-                # --- FASE 6: PROCESSAMENTO DE ASSINATURAS & LOGS ---
-                if activar_hash_audit:
-                    status.update(label="📊 Analisando Assinaturas de Criptografia...", state="running")
-                try:
-                      st.write("📊 Executando Identificador de Hash Avançado (Sessão 11)...")
-                      s11_identificador_hash(dom)
-                except Exception as e:
-                      st.error(f"⚠️ Erro na Sessão 11 (Hash): {e}")
+                s14_mysql_root_audit(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 14 (MySQL): {e}")
+        # --- FASE 6: PROCESSAMENTO DE ASSINATURAS & LOGS ---
+        if activar_hash_audit:
+             status.update(label="📊 Analisando Assinaturas de Criptografia...", state="running")
+        try:
+             st.write("📊 Executando Identificador de Hash Avançado (Sessão 11)...")
+             s11_identificador_hash(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 11 (Hash): {e}")
 
 # --- SESSÃO FINAL: BOTÃO DE FINALIZAÇÃO ---
     if st.button("Finalizar Auditoria"):
