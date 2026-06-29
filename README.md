@@ -35,11 +35,38 @@ Análise automatizada de infraestrutura web, cabeçalhos de segurança e intelig
 * **Para que serve:** Permite descobrir vulnerabilidades conhecidas publicamente na internet sem gerar alertas nos sistemas de monitorização internos do alvo.
 
 ---
+# Red Team Auditor Pro - V38.0
+
+Análise automatizada de infraestrutura web, cabeçalhos de segurança e inteligência de ameaças.
+Automated analysis of web infrastructure, security headers, and threat intelligence.
+
+## 1. Fingerprint de Infraestrutura / Infrastructure Fingerprinting
+- **O que faz / What it does:** Identifica tecnologias ocultas e a infraestrutura que suporta o alvo. / Identifies hidden technologies and infrastructure supporting the target.
+- **Explicação técnica / Technical explanation:** Realiza detecção de proxies reversos, provedores de nuvem e identifica o servidor web ativo. / Performs reverse proxy detection, cloud provider identification, and active web server fingerprinting.
+- **Para que serve / Purpose:** Mapear superfície de ataque e entender o ambiente de hospedagem. / Mapping attack surface and understanding the hosting environment.
+
+## 2. Análise de Headers de Segurança / Security Headers Analysis
+- **O que faz / What it does:** Validação ativa de respostas HTTP. / Active validation of HTTP responses.
+- **Explicação técnica / Technical explanation:** Analisa políticas cruciais como Content-Security-Policy (CSP), X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security (HSTS) e Permissions-Policy. / Analyzes crucial policies such as CSP, X-Frame-Options, X-Content-Type-Options, HSTS, and Permissions-Policy.
+- **Para que serve / Purpose:** Identificar falhas que expõem utilizadores a ataques baseados no navegador. / Identifying vulnerabilities that expose users to browser-based attacks.
+
+## 3. Auditoria de Cookies / Cookie Security Audit
+- **O que faz / What it does:** Análise minuciosa de cookies de sessão. / Detailed analysis of session cookies.
+- **Explicação técnica / Technical explanation:** Verifica flags essenciais: HttpOnly, Secure e SameSite (Lax, Strict, None). / Checks essential flags: HttpOnly, Secure, and SameSite (Lax, Strict, None).
+- **Para que serve / Purpose:** Valida proteção contra roubo de sessão e ataques de CSRF. / Validates protection against session hijacking and CSRF attacks.
+
+## Instalação / Installation
+```bash
+git clone [https://github.com/renanrj430-wq/redteam-scanner-python.git](https://github.com/renanrj430-wq/redteam-scanner-python.git)
+cd redteam-scanner-python
+pip install -r requirements.txt
+
 📖 Como Usar (Manual do Utilizador)
 ​O Red Team Auditor Pro utiliza o Streamlit para fornecer uma interface gráfica moderna, responsiva e inteiramente executada através do seu navegador web.
 ​Passo 1: Iniciar o Painel Streamlit
 ​No terminal, certifique-se de que está dentro da pasta do projeto e execute o motor da interface web:
 
+python auditor.py --target <alvo/target>
 streamlit run auditor_web.py
 
 ⚠️ Isenção de Responsabilidade (Disclaimer)
