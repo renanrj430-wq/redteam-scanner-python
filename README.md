@@ -1,4 +1,4 @@
-# Red Team Auditor Pro - V37.0 (Industrial Engine)
+# Red Team Auditor Pro - V38.0 (Industrial Engine)
 
 Análise automatizada de infraestrutura web, cabeçalhos de segurança e inteligência de ameaças. O **Red Team Auditor Pro** é uma ferramenta de auditoria defensiva e ofensiva desenvolvida em Python com interface gráfica via Streamlit, projetada para analistas de segurança e investigadores em auditorias autorizadas e atividades de Recon (reconhecimento).
 
