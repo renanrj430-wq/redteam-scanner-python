@@ -5,10 +5,10 @@ RUN apt-get update && apt-get install -y nmap iputils-ping && rm -rf /var/lib/ap
 
 WORKDIR /app
 
-# Copia todos os seus arquivos de código para dentro do container
+# Copia todos os arquivos do seu repositório para o container
 COPY . .
 
-# Instala todas as dependências listadas no arquivo requirements.txt
+# Instala as dependências a partir do arquivo requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 8501
