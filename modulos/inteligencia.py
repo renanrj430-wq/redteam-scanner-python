@@ -49,5 +49,3 @@ def analisar_logs_via_nuvem(log_comple, alvo):
 
     except Exception as e:
         return {"erro": f"Falha ao processar auditoria: {str(e)}"}
-
-
