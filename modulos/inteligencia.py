@@ -44,8 +44,10 @@ def analisar_logs_via_nuvem(log_comple, alvo):
             max_tokens=6000,
             response_format={"type": "json_object"}
         )
-        
+
         return json.loads(completion.choices[0].message.content)
 
     except Exception as e:
         return {"erro": f"Falha ao processar auditoria: {str(e)}"}
+
+
