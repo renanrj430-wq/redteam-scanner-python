@@ -1633,7 +1633,7 @@ def renderizar_relatorio(dados):
     # 2. Cria o botão para fazer o download do PDF no Streamlit
     st.download_button(
         label="📥 Baixar Relatório Técnico Oficial (PDF)",
-        data=arquivo_pdf_bytes,
+        data = bytes(arquivo_pdf_bytes).
         file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
         mime="application/pdf"
     )
