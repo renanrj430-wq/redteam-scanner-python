@@ -51,11 +51,11 @@ def analisar_logs_via_nuvem(log_comple, alvo):
             ]
         }
 
-completion = client.chat.completions.create(
-        model="openai/gpt-oss-120b",  
-        messages=[
-            {"role": "system", "content": f"{prompt_sistema}"},
-            {"role": "user", "content": f"Alvo: {alvo}"}
+            completion = client.chat.completions.create(
+                model="openai/gpt-oss-120b",  
+                messages=[
+                    {"role": "system", "content": f"{prompt_sistema}"},
+                    {"role": "user", "content": f"Alvo: {alvo}"}
         ],
         temperature=0.1,
         max_tokens=6000,
