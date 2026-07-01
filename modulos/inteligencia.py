@@ -51,17 +51,16 @@ def analisar_logs_via_nuvem(log_comple, alvo):
             ]
         }
 
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[
-                {"role": "system", "content": f"{prompt_sistema}\n\nResponda usando estritamente este esquema JSON: {json.dumps(estrutura_json_esperada, ensure_ascii=False)}"},
-                {"role": "user", "content": f"Alvo: {alvo}\n\nLogs coletados:\n{log_final_consolidado}"}
-            ],
-            temperature=0.1,
-            max_tokens=6000,
-            response_format={"type": "json_object"}
-        )
-
+completion = client.chat.completions.create(
+        model="openai/gpt-oss-120b",  
+        messages=[
+            {"role": "system", "content": f"{prompt_sistema}"},
+            {"role": "user", "content": f"Alvo: {alvo}"}
+        ],
+        temperature=0.1,
+        max_tokens=6000,
+        response_format={"type": "json_object"}
+    )
         return json.loads(completion.choices[0].message.content)
 
     except Exception as e:
