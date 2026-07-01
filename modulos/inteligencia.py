@@ -52,7 +52,7 @@ def analisar_logs_via_nuvem(log_comple, alvo):
         }
 
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b"
             messages=[
                 {"role": "system", "content": f"{prompt_sistema}\n\nResponda usando estritamente este esquema JSON: {json.dumps(estrutura_json_esperada, ensure_ascii=False)}"},
                 {"role": "user", "content": f"Alvo: {alvo}\n\nLogs coletados:\n{log_final_consolidado}"}

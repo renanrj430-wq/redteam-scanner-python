@@ -349,7 +349,7 @@ def triagem_vulnerabilidade_ia(dados_achados, groq_client):
         
         # Chamada da API estruturada com prompt blindado dentro do bloco try
         response = groq_client.chat.completions.create(
-            model="llama3-8b-8192", # Modelo veloz ideal para triagem orientada a contexto
+            model="openai/gpt-oss-120b", # Modelo veloz ideal para triagem orientada a contexto
             messages=[
                 {
                     "role": "system",
