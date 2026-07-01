@@ -1634,7 +1634,7 @@ def renderizar_relatorio(dados):
     st.download_button(
         label="📥 Baixar Relatório Técnico Oficial (PDF)",
         data = bytes(arquivo_pdf_bytes).
-        file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
+        file_name = f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf"
         mime="application/pdf"
     )
 if __name__ == "__main__":
