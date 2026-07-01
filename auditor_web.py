@@ -1627,31 +1627,29 @@ def renderizar_relatorio(dados):
 
     st.success("Fim do relatório.")
 
-# --- CORREÇÃO DO BLOCO DE DOWNLOAD ---
-try:
-    # Certifica-se de que os dados estão em bytes. Se for string, codifica para utf-8.
-    # Isso resolve o TypeError, pois força o formato correto para o Streamlit.
-    if isinstance(arquivo_pdf_bytes, str):
-        dados_para_download = arquivo_pdf_bytes.encode('utf-8')
-    else:
-        dados_para_download = arquivo_pdf_bytes
-        
-    st.download_button(
-        label="📥 Baixar Relatório Técnico Oficial (PDF)",
-        data=dados_para_download,
-        file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
-        mime="application/pdf"
-    )
-except Exception as e:
-    st.error(f"Erro ao preparar o download do PDF: {e}")
-    st.stop() # Para a execução aqui para evitar que o script continue com erro
+# 1. Certifique-se de que estamos lidando com bytes
+    # Tenta obter os dados do PDF de forma segura
+    try:
+        # Se for um objeto FPDF, extrai os bytes
+        if hasattr(arquivo_pdf_bytes, 'output'):
+            dados_para_download = arquivo_pdf_bytes.output(dest='S').encode('latin-1')
+        # Se for string, codifica para bytes
+        elif isinstance(arquivo_pdf_bytes, str):
+            dados_para_download = arquivo_pdf_bytes.encode('utf-8')
+        # Se já for bytes, usa diretamente
+        else:
+            dados_para_download = arquivo_pdf_bytes
+            
+        # 2. Cria o botão para download
+        st.download_button(
+            label="📥 Baixar Relatório Técnico Oficial (PDF)",
+            data=dados_para_download,
+            file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
+            mime="application/pdf"
+        )
+    except Exception as e:
+        st.error(f"Erro ao preparar o arquivo PDF: {e}")
 
-# --- VERIFICAÇÃO DE DADOS VAZIOS (Importante para o seu relatório) ---
-# Verifique se a variável 'dados' (que vem da Groq) está vazia
-if not dados or 'resumo_executivo' not in dados:
-    st.warning("⚠️ A inteligência artificial (Groq) retornou dados vazios ou incompletos. O relatório não foi gerado.")
-    st.info("Verifique se você forneceu um alvo válido e se a chave da API da Groq está correta nas variáveis de ambiente do Render.")
-    # Opcional: Se o seu app parar aqui, o usuário vê esse aviso e não o relatório vazio.
-
+# Finaliza o script corretamente
 if __name__ == "__main__":
     main()
