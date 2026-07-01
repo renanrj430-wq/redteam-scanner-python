@@ -1600,56 +1600,64 @@ def main():
         # pois já processamos acima
         renderizar_relatorio(dados)
 
-# --- FUNÇÃO AUXILIAR DE RENDERIZAÇÃO (Coloque fora do main) ---
+# --- FUNÇÃO DE RENDERIZAÇÃO DO RELATÓRIO ---
 def renderizar_relatorio(dados):
     st.markdown("---")
-    st.subheader("📊 Relatório de Auditoria")
+    st.subheader("📋 Relatório de Auditoria")
     st.metric("Alvo Identificado", dados.get("alvo", "Não informado"))
-    
+
     st.markdown("### 📝 Análise Técnica")
-    st.info(dados.get("resumo_executivo", "Sem resumo."))
-    
+    st.info(dados.get("resumo_executivo", "Sem resumo disponível."))
+
     st.markdown("### ⚠️ Nível de Risco")
     st.warning(dados.get("nivel_risco_geral", "Sem classificação."))
-    
-    # --- NOVO BLOCO PARA VULNERABILIDADES E REMEDIAÇÕES ---
+
     st.markdown("### 🛡️ Vulnerabilidades Detectadas")
     vulns = dados.get("vulnerabilidades_detectadas", [])
-    
+
     if vulns:
         for v in vulns:
             with st.expander(f"Falha: {v.get('vulnerabilidade', 'Desconhecido')}"):
                 st.write(f"**Severidade:** {v.get('severidade', 'N/A')}")
                 st.write(f"**Detalhes:** {v.get('detalhes_tecnicos', 'N/A')}")
-                st.write(f"**✅ Remediação:** {v.get('mitigacao', 'N/A')}")
+                st.write(f"**Remediação:** {v.get('mitigacao', 'N/A')}")
     else:
         st.write("Nenhuma vulnerabilidade específica detectada nos logs.")
-
+    
     st.success("Fim do relatório.")
 
-# 1. Certifique-se de que estamos lidando com bytes
-    # Tenta obter os dados do PDF de forma segura
+# --- LÓGICA DE EXIBIÇÃO E DOWNLOAD ---
+if 'relatorio_dados' in st.session_state:
+    dados = st.session_state['relatorio_dados']
+    
+    # Renderiza na tela
+    renderizar_relatorio(dados)
+    
+    # Tenta gerar o PDF
     try:
-        # Se for um objeto FPDF, extrai os bytes
-        if hasattr(arquivo_pdf_bytes, 'output'):
-            dados_para_download = arquivo_pdf_bytes.output(dest='S').encode('latin-1')
-        # Se for string, codifica para bytes
-        elif isinstance(arquivo_pdf_bytes, str):
-            dados_para_download = arquivo_pdf_bytes.encode('utf-8')
-        # Se já for bytes, usa diretamente
-        else:
-            dados_para_download = arquivo_pdf_bytes
-            
-        # 2. Cria o botão para download
-        st.download_button(
-            label="📥 Baixar Relatório Técnico Oficial (PDF)",
-            data=dados_para_download,
-            file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
-            mime="application/pdf"
-        )
-    except Exception as e:
-        st.error(f"Erro ao preparar o arquivo PDF: {e}")
+        arquivo_pdf_bytes = gerar_pdf_relatorio(dados, dados.get('alvo', 'scan'))
+    except Exception:
+        arquivo_pdf_bytes = None
 
-# Finaliza o script corretamente
+    # Botão de download (apenas se PDF existir)
+    if arquivo_pdf_bytes is not None:
+        try:
+            # Tratamento robusto de bytes
+            if hasattr(arquivo_pdf_bytes, 'output'):
+                dados_para_download = arquivo_pdf_bytes.output(dest='S').encode('latin-1')
+            elif isinstance(arquivo_pdf_bytes, str):
+                dados_para_download = arquivo_pdf_bytes.encode('utf-8')
+            else:
+                dados_para_download = arquivo_pdf_bytes
+            
+            st.download_button(
+                label="📥 Baixar Relatório Técnico Oficial (PDF)",
+                data=dados_para_download,
+                file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
+                mime="application/pdf"
+            )
+        except Exception as e:
+            st.error(f"Erro ao processar download: {e}")
+
 if __name__ == "__main__":
     main()
