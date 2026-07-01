@@ -1630,12 +1630,13 @@ def renderizar_relatorio(dados):
 # 1. Transforma o dicionário de dados no arquivo PDF físico em memória
     arquivo_pdf_bytes = gerar_pdf_relatorio(dados, dados.get('alvo', 'alvo_analisado'))
 
-    # 2. Cria o botão para fazer o download do PDF no Streamlit
+# 2. Cria o botão para fazer o download do PDF no Streamlit
     st.download_button(
         label="📥 Baixar Relatório Técnico Oficial (PDF)",
-        data = bytes(arquivo_pdf_bytes).
-        file_name = f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf"
+        data=bytes(arquivo_pdf_bytes),
+        file_name=f"relatorio_auditoria_{dados.get('alvo', 'scan')}.pdf",
         mime="application/pdf"
     )
+
 if __name__ == "__main__":
     main()
