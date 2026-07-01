@@ -1,0 +1,7 @@
+streamlit
+requests
+shodan
+python-dotenv
+colorama
+hashids
+groq
