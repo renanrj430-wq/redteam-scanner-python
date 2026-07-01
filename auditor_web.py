@@ -1652,5 +1652,6 @@ if not dados or 'resumo_executivo' not in dados:
     st.warning("⚠️ A inteligência artificial (Groq) retornou dados vazios ou incompletos. O relatório não foi gerado.")
     st.info("Verifique se você forneceu um alvo válido e se a chave da API da Groq está correta nas variáveis de ambiente do Render.")
     # Opcional: Se o seu app parar aqui, o usuário vê esse aviso e não o relatório vazio.
-if__name__ == "__main__":
+
+if __name__ == "__main__":
     main()
