@@ -34,32 +34,17 @@ def analisar_logs_via_nuvem(log_comple, alvo):
             "10. Responda OBRIGATORIAMENTE em JSON puro, sem textos adicionais."
         )
 
-        estrutura_json_esperada = {
-            "alvo": "string",
-            "resumo_executivo": "string",
-            "nivel_risco_geral": "string",
-            "portas_e_servicos": [
-                {"porta": "int", "servico": "string", "versao": "string"}
+        completion = client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {"role": "system", "content": f"{prompt_sistema}"},
+                {"role": "user", "content": f"Alvo: {alvo}\nLogs coletados: {log_final_consolidado}"}
             ],
-            "vulnerabilidades_detectadas": [
-                {
-                    "vulnerabilidade": "string",
-                    "severidade": "string",
-                    "detalhes_tecnicos": "string",
-                    "mitigacao": "string"
-                }
-            ]
-        }
-            completion = client.chat.completions.create(
-                model="openai/gpt-oss-120b",  # <--- ADICIONE ESTA VÍRGULA AQUI!
-                messages=[
-                    {"role": "system", "content": f"{prompt_sistema}"},
-                    {"role": "user", "content": f"Alvo: {alvo}"}
-        ],
-        temperature=0.1,
-        max_tokens=6000,
-        response_format={"type": "json_object"}
-    )
+            temperature=0.1,
+            max_tokens=6000,
+            response_format={"type": "json_object"}
+        )
+        
         return json.loads(completion.choices[0].message.content)
 
     except Exception as e:
