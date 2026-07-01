@@ -50,7 +50,6 @@ def analisar_logs_via_nuvem(log_comple, alvo):
                 }
             ]
         }
-
             completion = client.chat.completions.create(
                 model="openai/gpt-oss-120b",  
                 messages=[
