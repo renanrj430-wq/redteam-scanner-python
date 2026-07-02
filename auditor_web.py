@@ -1446,84 +1446,82 @@ def main():
         key='url_alvo'
     )
 
-# --- 1. BOTÃO INICIAR (POSIÇÃO SUPERIOR) ---
-if st.button("Iniciar Auditoria Industrial Completa"):
-    # ... (contexto já capturado pelo extrair_contexto_alvo)
-    
-    # 1. Execução das ferramentas (Exemplos)
-    logs_nmap = rodar_nmap(alvo)          # Scan de portas (Regra 4)
-    logs_cabeçalhos = verificar_headers(alvo) # Segurança web
-    logs_diretorios = rodar_ffuf(alvo)    # Acesso a diretórios/credenciais
-    
-    # 2. UNIFICAÇÃO (Aqui é onde você coloca tudo para a IA)
-    # Quanto mais organizado o texto aqui, melhor a IA performa
-    logs_completos = f"""
-    --- DADOS DE CONTEXTO ---
-    {contexto}
-    
-    --- SCAN DE REDE (NMAP) ---
-    {logs_nmap}
-    
-    --- CABEÇALHOS DE SEGURANÇA ---
-    {logs_cabeçalhos}
-    
-    --- VARREDURA DE DIRETÓRIOS E CREDENCIAIS ---
-    {logs_diretorios}
-    """
-    
-    # 3. SALVAMENTO
-    st.session_state['logs_completos'] = logs_completos
-    st.success("Tudo pronto! Logs unificados para análise.")
-                # --- FASE 1: INTELIGÊNCIA PRÉVIA & RECON ---
-                status.update(label="🔍 Fase 1: Consultando Inteligência (Shodan)...", state="running")
-                try:
-                    st.write("🔍 Consultando Inteligência (Shodan)...")
-                    s0_inteligencia_shodan(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Falha na Sessão Shodan: {e}")
+    # --- 1. BOTÃO INICIAR (POSIÇÃO SUPERIOR) ---
+    if st.button("Iniciar Auditoria Industrial Completa"):
+        alvo = st.session_state.get('url_alvo', '')
+        contexto = extrair_contexto_alvo(alvo)
+        
+        # 1. Execução das ferramentas
+        logs_nmap = rodar_nmap(alvo)
+        logs_cabeçalhos = verificar_headers(alvo)
+        logs_diretorios = rodar_ffuf(alvo)
+        
+        # 2. UNIFICAÇÃO
+        logs_completos = f"""--- DADOS DE CONTEXTO ---
+{contexto}
 
-                try:
-                    st.write("⚙️ Calibrando motor de falso positivo...")
-                    calibragem = calibrar_motor_llc(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Falha na calibração do motor: {e}")
-                    calibragem = None
+--- SCAN DE REDE (NMAP) ---
+{logs_nmap}
 
-                # --- FASE 2: INFRAESTRUTURA & DNS ---
-                status.update(label="🌐 Fase 2: Mapeando Infraestrutura e Subdomínios...", state="running")
-                try:
-                    st.write("🌐 Mapeando Infraestrutura e Subdomínios...")
-                    s1_recon_dns(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 1 (DNS): {e}")
+--- CABEÇALHOS DE SEGURANÇA ---
+{logs_cabeçalhos}
 
-                try:
-                    s2_geo_infra(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 2 (GeoIP): {e}")
+--- VARREDURA DE DIRETÓRIOS E CREDENCIAIS ---
+{logs_diretorios}"""
+        
+        # 3. SALVAMENTO
+        st.session_state['logs_completos'] = logs_completos
+        st.success("Tudo pronto! Logs unificados para análise.")
+# --- FASE 1: INTELIGÊNCIA PRÉVIA & RECON ---
+status.update(label="🔍 Fase 1: Consultando Inteligência (Shodan)...", state="running")
+    try:
+        st.write("🔍 Consultando Inteligência (Shodan)...")
+        s0_inteligencia_shodan(dom)
+    except Exception as e:
+        st.error(f"⚠️ Falha na Sessão Shodan: {e}")
 
-                try:
-                    s15_subdomain_discovery(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 15 (Subdomínios): {e}")
+    try:
+        st.write("⚙️ Calibrando motor de falso positivo...")
+        calibragem = calibrar_motor_llc(dom)
+    except Exception as e:
+        st.error(f"⚠️ Falha na calibração do motor: {e}")
+        calibragem = None
+
+# --- FASE 2: INFRAESTRUTURA & DNS ---
+status.update(label="🌐 Fase 2: Mapeando Infraestrutura e Subdomínios...", state="running")
+        try:
+            st.write("🌐 Mapeando Infraestrutura e Subdomínios...")
+            s1_recon_dns(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 1 (DNS): {e}")
+
+        try:
+             s2_geo_infra(dom)
+        except Exception as e:
+             st.error(f"⚠️ Erro na Sessão 2 (GeoIP): {e}")
+
+        try:
+             s15_subdomain_discovery(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 15 (Subdomínios): {e}")
                 
-                try:
-                    s16_ct_logs_discovery(dom)  # <-- Adiciona o novo braço de satélite passivo aqui!
-                except Exception as e:
+        try:
+             s16_ct_logs_discovery(dom)  # <-- Adiciona o novo braço de satélite passivo aqui!
+        except Exception as e:
                     st.error(f"⚠️ Erro na Sessão 16 (CT Logs): {e}")
-                # --- FASE 3: FINGERPRINT & CABEÇALHOS ---
-                status.update(label="🛡️ Fase 3: Analisando Fingerprint e Cabeçalhos...", state="running")
-                try:
-                    st.write("🛡️ Analisando Fingerprint e Cabeçalhos...")
-                    s3_fingerprint_tecnologico(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 3 (Fingerprint): {e}")
+# --- FASE 3: FINGERPRINT & CABEÇALHOS ---
+status.update(label="🛡️ Fase 3: Analisando Fingerprint e Cabeçalhos...", state="running")
+        try:
+            st.write("🛡️ Analisando Fingerprint e Cabeçalhos...")
+            s3_fingerprint_tecnologico(dom)
+        except Exception as e:
+            st.error(f"⚠️ Erro na Sessão 3 (Fingerprint): {e}")
 
-                try:
-                    s4_owasp_headers(dom)
-                except Exception as e:
-                    st.error(f"⚠️ Erro na Sessão 4 (OWASP Headers): {e}")
-
+        try:
+             s4_owasp_headers(dom)
+        except Exception as e:
+             st.error(f"⚠️ Erro na Sessão 4 (OWASP Headers): {e}")
+        
 # --- FASE 4: FUZZING & PORT SCANNER ---
         status.update(label="🚙 Executando Motor de Fuzzing e Portas...", state="running")
 
