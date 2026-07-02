@@ -1581,40 +1581,52 @@ def main():
             st.error(f"⚠️ Erro na Sessão 11 (Hash): {e}")
 
 # --- SESSÃO FINAL: BOTÃO DE FINALIZAÇÃO ---
-    if st.button("Finalizar Auditoria"):
-        # 1. Recupera as informações essenciais
-        alvo = st.session_state.get('url_alvo', '')
-        log_completo = st.session_state.get('logs_completos', '')
+if st.button("Finalizar Auditoria"):
+    # 1. Recupera da sessão (Verifique o nome da chave: 'logs_completos')
+    alvo = st.session_state.get('url_alvo', 'Desconhecido')
+    logs = st.session_state.get('logs_completos', '')
 
-        # 2. Executa a função e SALVA O RESULTADO na sessão (para não sumir)
-        with st.spinner("🤖 IA processando dados..."):
-            dados = analisar_logs_via_nuvem(log_completo, alvo)
-            st.session_state['relatorio_dados'] = dados
+    # 2. Processa com a IA
+    with st.spinner("IA processando logs e gerando relatório..."):
+        dados = analisar_logs_via_nuvem(logs, alvo)
+        st.session_state['relatorio_dados'] = dados
 
-    # 3. EXIBIÇÃO: Verifica se há dados na sessão e renderiza
-    if 'relatorio_dados' in st.session_state and st.session_state['relatorio_dados']:
-        dados = st.session_state['relatorio_dados']
+# 3. Renderização Segura (Chame isso após o processamento)
+if 'relatorio_dados' in st.session_state:
+    dados = st.session_state['relatorio_dados']
+    
+    # Debug visual para garantir que os dados chegaram
+    with st.expander("🔍 Ver JSON de Debug"):
+        st.write(dados)
         
-        # Chama a função de exibição que desenha o relatório na tela
-        # Note: removi a chamada da nuvem de dentro da função, 
-        # pois já processamos acima
-        renderizar_relatorio(dados)
-
-# --- FUNÇÃO DE RENDERIZAÇÃO DO RELATÓRIO ---
+    st.markdown("---")
+    st.subheader("📋 Relatório de Auditoria")
+    st.metric("Alvo Identificado", dados.get("alvo", "Não informado"))
+    st.info(dados.get("resumo_executivo", "Sem resumo disponível."))
+    st.warning(f"Nível de Risco: {dados.get('nivel_risco_geral', 'Sem classificação.')}")
+    
+    # Renderização das vulnerabilidades com segurança
+    vulns = dados.get("vulnerabilidades_detectadas", [])
+    if vulns:
+        for v in vulns:
+            with st.expander(f"⚠️ {v.get('vulnerabilidade', 'Falha')}"):
+                st.write(f"**Severidade:** {v.get('severidade', 'N/A')}")
+                st.write(f"**Detalhes:** {v.get('detalhes_tecnicos', 'N/A')}")
+                st.write(f"**Remediação:** {v.get('mitigacao', 'N/A')}")
+    else:
+        st.success("Nenhuma vulnerabilidade crítica detectada.")
+# --- FUNÇÃO DE RENDERIZAÇÃO ---
 def renderizar_relatorio(dados):
     st.markdown("---")
     st.subheader("📋 Relatório de Auditoria")
     st.metric("Alvo Identificado", dados.get("alvo", "Não informado"))
-
     st.markdown("### 📝 Análise Técnica")
-    st.info(dados.get("resumo_executivo", "Sem resumo disponível."))
-
+    st.info(dados.get("resumo_executivo", "Sem resumo."))
     st.markdown("### ⚠️ Nível de Risco")
     st.warning(dados.get("nivel_risco_geral", "Sem classificação."))
-
-    st.markdown("### 🛡️ Vulnerabilidades Detectadas")
+    
     vulns = dados.get("vulnerabilidades_detectadas", [])
-
+    st.markdown("### 🛡️ Vulnerabilidades Detectadas")
     if vulns:
         for v in vulns:
             with st.expander(f"Falha: {v.get('vulnerabilidade', 'Desconhecido')}"):
@@ -1622,27 +1634,24 @@ def renderizar_relatorio(dados):
                 st.write(f"**Detalhes:** {v.get('detalhes_tecnicos', 'N/A')}")
                 st.write(f"**Remediação:** {v.get('mitigacao', 'N/A')}")
     else:
-        st.write("Nenhuma vulnerabilidade específica detectada nos logs.")
-    
-    st.success("Fim do relatório.")
+        st.write("Nenhuma vulnerabilidade detectada.")
 
-# --- LÓGICA DE EXIBIÇÃO E DOWNLOAD ---
+# --- LÓGICA DE EXECUÇÃO E DOWNLOAD ---
 if 'relatorio_dados' in st.session_state:
     dados = st.session_state['relatorio_dados']
-    
-    # Renderiza na tela
     renderizar_relatorio(dados)
     
-    # Tenta gerar o PDF
+    # Gerar PDF com tratamento de erro
     try:
         arquivo_pdf_bytes = gerar_pdf_relatorio(dados, dados.get('alvo', 'scan'))
-    except Exception:
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
         arquivo_pdf_bytes = None
 
-    # Botão de download (apenas se PDF existir)
-    if arquivo_pdf_bytes is not None:
+    # Download seguro
+    if arquivo_pdf_bytes:
         try:
-            # Tratamento robusto de bytes
+            # Converte para bytes se necessário
             if hasattr(arquivo_pdf_bytes, 'output'):
                 dados_para_download = arquivo_pdf_bytes.output(dest='S').encode('latin-1')
             elif isinstance(arquivo_pdf_bytes, str):
@@ -1657,7 +1666,7 @@ if 'relatorio_dados' in st.session_state:
                 mime="application/pdf"
             )
         except Exception as e:
-            st.error(f"Erro ao processar download: {e}")
+            st.error(f"Erro ao preparar o download: {e}")
 
 if __name__ == "__main__":
     main()
