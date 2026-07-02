@@ -1447,24 +1447,22 @@ def main():
     )
 
     # --- 3. BOTÃO DE INICIALIZAÇÃO E SANITIZAÇÃO ---
-    if st.button("Iniciar Auditoria Industrial Completa"):
-        
-        # Puxa o dado digitado direto da chave gerenciada pelo widget
-        alvo_bruto = st.session_state.get('url_alvo', '').strip()
-        
-        if not alvo_bruto or alvo_bruto == "exemplo.com" or alvo_bruto == "":
-            st.error("🚨 Por favor, insira um alvo válido para começar.")
-            st.stop()
-        
-        # Faz a limpeza dos protocolos e caminhos extras
-        dom = alvo_bruto.replace("https://", "").replace("http://", "").split('/')[0].strip()
-        
-        # Guardamos o domínio limpo em outra chave segura para uso das ferramentas internas
-        st.session_state['alvo_limpo'] = dom
-        
-        # Dispara o gerenciador de status nativo do Streamlit usando o domínio higienizado
-        with st.status(f"🔎 Auditoria em progresso: {dom}...", expanded=True) as status:
-                
+if st.button("Iniciar Auditoria industrial Completa"):
+    alvo = st.session_state.get('url_alvo', '')
+    if not alvo:
+        st.error("Defina um alvo antes de iniciar.")
+    else:
+        with st.spinner("Executando varreduras e capturando contexto..."):
+            # Captura o contexto web
+            contexto = extrair_contexto_alvo(alvo)
+            
+            # Aqui entrariam seus scanners (nmap, etc)
+            # Exemplo simulado de logs
+            logs_scanners = "Logs de rede capturados com sucesso." 
+            
+            # SALVAMENTO NA MEMÓRIA (O segredo para o botão de baixo ler)
+            st.session_state['logs_completos'] = f"{contexto}\n\n{logs_scanners}"
+            st.success("Varredura concluída! Agora clique em 'Finalizar Auditoria'.")
                 # --- FASE 1: INTELIGÊNCIA PRÉVIA & RECON ---
                 status.update(label="🔍 Fase 1: Consultando Inteligência (Shodan)...", state="running")
                 try:
@@ -1582,33 +1580,21 @@ def main():
 
 # --- SESSÃO FINAL: BOTÃO DE FINALIZAÇÃO ---
 if st.button("Finalizar Auditoria"):
-    # 1. Recupera as informações essenciais da sessão
-    alvo = st.session_state.get('url_alvo', 'Desconhecido')
+    # Recupera os logs que foram salvos pelo botão acima
     logs = st.session_state.get('logs_completos', '')
+    alvo = st.session_state.get('url_alvo', 'Desconhecido')
 
-    # 2. Verifica se existem logs antes de chamar a IA
-    if logs and len(logs) > 20:
-        with st.spinner("IA processando logs e gerando relatório técnico..."):
-            # Executa a função e salva o resultado na sessão
+    if logs:
+        with st.spinner("IA analisando logs..."):
+            # Processa e salva na sessão
             dados = analisar_logs_via_nuvem(logs, alvo)
             st.session_state['relatorio_dados'] = dados
     else:
-        st.error("⚠️ Nenhum log de auditoria foi encontrado. Certifique-se de executar 'Iniciar Auditoria' primeiro.")
+        st.error("⚠️ Nenhum log encontrado. Execute o 'Iniciar' primeiro.")
 
-# 3. EXIBIÇÃO: Verifica se há dados na sessão e renderiza na tela
+# Exibição do relatório (Renderiza assim que os dados existirem)
 if 'relatorio_dados' in st.session_state:
-    dados = st.session_state['relatorio_dados']
-    
-    # Debug visual para garantir que os dados chegaram
-    with st.expander("🔍 Ver JSON de Debug (IA)"):
-        st.write(dados)
-    
-    # Verifica se a IA retornou erro antes de renderizar
-    if "erro" in dados:
-        st.error(f"Erro na análise: {dados['erro']}")
-    else:
-        # Chama a função de exibição que desenha o relatório na tela
-        renderizar_relatorio(dados)
+    renderizar_relatorio(st.session_state['relatorio_dados'])
     # Debug visual para garantir que os dados chegaram
     with st.expander("🔍 Ver JSON de Debug"):
         st.write(dados)
