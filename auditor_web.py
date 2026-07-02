@@ -1582,19 +1582,33 @@ def main():
 
 # --- SESSÃO FINAL: BOTÃO DE FINALIZAÇÃO ---
 if st.button("Finalizar Auditoria"):
-    # 1. Recupera da sessão (Verifique o nome da chave: 'logs_completos')
+    # 1. Recupera as informações essenciais da sessão
     alvo = st.session_state.get('url_alvo', 'Desconhecido')
     logs = st.session_state.get('logs_completos', '')
 
-    # 2. Processa com a IA
-    with st.spinner("IA processando logs e gerando relatório..."):
-        dados = analisar_logs_via_nuvem(logs, alvo)
-        st.session_state['relatorio_dados'] = dados
+    # 2. Verifica se existem logs antes de chamar a IA
+    if logs and len(logs) > 20:
+        with st.spinner("IA processando logs e gerando relatório técnico..."):
+            # Executa a função e salva o resultado na sessão
+            dados = analisar_logs_via_nuvem(logs, alvo)
+            st.session_state['relatorio_dados'] = dados
+    else:
+        st.error("⚠️ Nenhum log de auditoria foi encontrado. Certifique-se de executar 'Iniciar Auditoria' primeiro.")
 
-# 3. Renderização Segura (Chame isso após o processamento)
+# 3. EXIBIÇÃO: Verifica se há dados na sessão e renderiza na tela
 if 'relatorio_dados' in st.session_state:
     dados = st.session_state['relatorio_dados']
     
+    # Debug visual para garantir que os dados chegaram
+    with st.expander("🔍 Ver JSON de Debug (IA)"):
+        st.write(dados)
+    
+    # Verifica se a IA retornou erro antes de renderizar
+    if "erro" in dados:
+        st.error(f"Erro na análise: {dados['erro']}")
+    else:
+        # Chama a função de exibição que desenha o relatório na tela
+        renderizar_relatorio(dados)
     # Debug visual para garantir que os dados chegaram
     with st.expander("🔍 Ver JSON de Debug"):
         st.write(dados)
