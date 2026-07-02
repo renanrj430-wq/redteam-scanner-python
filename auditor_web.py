@@ -1446,23 +1446,34 @@ def main():
         key='url_alvo'
     )
 
-    # --- 3. BOTÃO DE INICIALIZAÇÃO E SANITIZAÇÃO ---
-if st.button("Iniciar Auditoria industrial Completa"):
-    alvo = st.session_state.get('url_alvo', '')
-    if not alvo:
-        st.error("Defina um alvo antes de iniciar.")
-    else:
-        with st.spinner("Executando varreduras e capturando contexto..."):
-            # Captura o contexto web
-            contexto = extrair_contexto_alvo(alvo)
-            
-            # Aqui entrariam seus scanners (nmap, etc)
-            # Exemplo simulado de logs
-            logs_scanners = "Logs de rede capturados com sucesso." 
-            
-            # SALVAMENTO NA MEMÓRIA (O segredo para o botão de baixo ler)
-            st.session_state['logs_completos'] = f"{contexto}\n\n{logs_scanners}"
-            st.success("Varredura concluída! Agora clique em 'Finalizar Auditoria'.")
+# --- 1. BOTÃO INICIAR (POSIÇÃO SUPERIOR) ---
+if st.button("Iniciar Auditoria Industrial Completa"):
+    # ... (contexto já capturado pelo extrair_contexto_alvo)
+    
+    # 1. Execução das ferramentas (Exemplos)
+    logs_nmap = rodar_nmap(alvo)          # Scan de portas (Regra 4)
+    logs_cabeçalhos = verificar_headers(alvo) # Segurança web
+    logs_diretorios = rodar_ffuf(alvo)    # Acesso a diretórios/credenciais
+    
+    # 2. UNIFICAÇÃO (Aqui é onde você coloca tudo para a IA)
+    # Quanto mais organizado o texto aqui, melhor a IA performa
+    logs_completos = f"""
+    --- DADOS DE CONTEXTO ---
+    {contexto}
+    
+    --- SCAN DE REDE (NMAP) ---
+    {logs_nmap}
+    
+    --- CABEÇALHOS DE SEGURANÇA ---
+    {logs_cabeçalhos}
+    
+    --- VARREDURA DE DIRETÓRIOS E CREDENCIAIS ---
+    {logs_diretorios}
+    """
+    
+    # 3. SALVAMENTO
+    st.session_state['logs_completos'] = logs_completos
+    st.success("Tudo pronto! Logs unificados para análise.")
                 # --- FASE 1: INTELIGÊNCIA PRÉVIA & RECON ---
                 status.update(label="🔍 Fase 1: Consultando Inteligência (Shodan)...", state="running")
                 try:
@@ -1578,21 +1589,20 @@ if st.button("Iniciar Auditoria industrial Completa"):
         except Exception as e:
             st.error(f"⚠️ Erro na Sessão 11 (Hash): {e}")
 
-# --- SESSÃO FINAL: BOTÃO DE FINALIZAÇÃO ---
+# --- 2. BOTÃO FINALIZAR (POSIÇÃO INFERIOR) ---
 if st.button("Finalizar Auditoria"):
-    # Recupera os logs que foram salvos pelo botão acima
+    # Recupera o que foi salvo acima
     logs = st.session_state.get('logs_completos', '')
     alvo = st.session_state.get('url_alvo', 'Desconhecido')
 
     if logs:
-        with st.spinner("IA analisando logs..."):
-            # Processa e salva na sessão
+        with st.spinner("IA processando logs..."):
             dados = analisar_logs_via_nuvem(logs, alvo)
             st.session_state['relatorio_dados'] = dados
     else:
         st.error("⚠️ Nenhum log encontrado. Execute o 'Iniciar' primeiro.")
 
-# Exibição do relatório (Renderiza assim que os dados existirem)
+# --- 3. RENDERIZAÇÃO DO RELATÓRIO (APARECE NO FINAL) ---
 if 'relatorio_dados' in st.session_state:
     renderizar_relatorio(st.session_state['relatorio_dados'])
     # Debug visual para garantir que os dados chegaram
